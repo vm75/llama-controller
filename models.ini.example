@@ -1,5 +1,3 @@
-version = 1
-
 ; Global settings applied to every model unless a preset overrides them.
 [*]
 threads = 4

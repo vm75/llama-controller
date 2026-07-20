@@ -32,6 +32,5 @@
       "flags": "",
       "extra_packages": ""
     }
-  ],
-  "llama_server_url": "http://localhost:8080"
+  ]
 }

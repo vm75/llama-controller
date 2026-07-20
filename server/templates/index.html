@@ -11,87 +11,108 @@
 
 <body class="bg-gray-100 p-8 font-sans">
   <div class="max-w-4xl mx-auto space-y-6">
-    <div class="flex items-center justify-between">
-      <h1 class="text-3xl font-bold text-gray-800">Llama Controller <span class="text-sm font-normal text-gray-500 ml-2">v{{ version }}</span></h1>
-      <!-- Status pipeline: Binary → Running → Open Server -->
-      <div class="flex items-center gap-2">
-        <!-- Stage 1: Binary not built (hidden once built) -->
-        <div id="stage-binary"
-          class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200/80 shadow-sm">
-          <span class="relative flex h-2 w-2">
-            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-            <span class="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
-          </span>
-          Not Built
+    <!-- Header Title Bar -->
+    <header class="bg-white border border-gray-200/80 rounded-2xl p-4 sm:p-5 shadow-sm flex flex-col gap-3">
+      <!-- Main Row -->
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 w-full">
+        <!-- LEFT SIDE: Logo and Title -->
+        <div class="flex items-start gap-3 sm:gap-4 shrink-0">
+          <!-- Logo Icon -->
+          <div class="flex-shrink-0 w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center p-1 sm:p-1.5 shadow-sm group hover:scale-105 transition-transform duration-200">
+            <img src="{{ url_for('static', filename='favicon.svg') }}" alt="Llama Controller Logo" class="w-full h-full object-contain">
+          </div>
+
+          <div class="flex flex-col justify-center min-h-[2.5rem] sm:min-h-[2.75rem]">
+            <!-- Title, Version -->
+            <div class="flex items-center gap-2 sm:gap-2.5">
+              <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-gray-900 leading-none">Llama Controller</h1>
+              <span class="px-2 py-0.5 text-[10px] sm:text-xs font-medium bg-gray-100 text-gray-600 rounded-full border border-gray-200/80 leading-none">v{{ version }}</span>
+            </div>
+          </div>
         </div>
 
-        <!-- Stage 2: Server run status (visible when binary exists) -->
-        <div id="stage-status"
-          class="hidden items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold border shadow-sm">
-          <span id="status-dot" class="relative flex h-2 w-2">
-            <span class="relative inline-flex rounded-full h-2 w-2 bg-gray-400"></span>
-          </span>
-          <span id="status-label">Stopped</span>
-        </div>
+        <!-- RIGHT SIDE: Banners and Status Pipeline -->
+        <div class="flex flex-wrap sm:flex-nowrap items-center gap-1.5 sm:gap-2 shrink-0 sm:ml-auto pl-[52px] sm:pl-0">
+          <!-- GitHub Banner -->
+          <a href="https://github.com/vm75/llama-controller" target="_blank" rel="noopener"
+            class="inline-flex items-center justify-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg shadow-sm hover:bg-gray-50 hover:text-gray-900 transition-all group shrink-0"
+            title="View source on GitHub">
+            <img src="{{ url_for('static', filename='github.svg') }}" alt="GitHub Logo"
+              class="w-4 h-4 sm:w-3.5 sm:h-3.5 transition-transform group-hover:scale-110 shrink-0">
+            <span class="hidden sm:inline">GitHub</span>
+          </a>
 
-        <!-- Stage 3: Open server link (visible when running) -->
-        <a id="server-link" href="{{ llama_server_url }}" target="_blank" rel="noopener"
-          class="hidden items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/80 shadow-sm hover:bg-emerald-100 hover:shadow-md hover:shadow-emerald-200/50 transition-all duration-200 group">
-          <img src="/llama-icon.svg" alt="llama" class="w-4 h-4">
-          Open Server
-          <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3 opacity-50 transition-transform duration-200 group-hover:translate-x-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M7 17l9.2-9.2M17 17V7H7"/>
-          </svg>
-        </a>
+          <!-- Docker Hub Banner -->
+          <a href="https://hub.docker.com/r/vm75/llama-controller" target="_blank" rel="noopener"
+            class="inline-flex items-center justify-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg shadow-sm hover:bg-gray-50 hover:text-gray-900 transition-all group shrink-0"
+            title="View container image on Docker Hub">
+            <img src="{{ url_for('static', filename='docker.svg') }}" alt="Docker Logo"
+              class="w-4 h-4 sm:w-3.5 sm:h-3.5 transition-transform group-hover:scale-110 shrink-0">
+            <span class="hidden sm:inline">Docker Hub</span>
+          </a>
 
-        <!-- Edit URL button (visible alongside server link) -->
-        <button id="btn-edit-url" onclick="toggleUrlEditor()" title="Configure server URL"
-          class="hidden items-center justify-center w-6 h-6 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-200/80 transition-all duration-200">
-          <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-          </svg>
-        </button>
+          <!-- Separator -->
+          <div class="w-px h-6 bg-gray-200 hidden sm:block"></div>
 
-        <!-- URL editor (inline, hidden by default) -->
-        <div id="url-editor" class="hidden items-center gap-1.5">
-          <input id="url-input" type="text" value="{{ llama_server_url }}"
-            class="text-xs border border-gray-300 rounded-lg px-2.5 py-1.5 w-56 focus:outline-none focus:ring-2 focus:ring-emerald-300 focus:border-emerald-400 transition-all"
-            placeholder="http://localhost:8080">
-          <button onclick="saveServerUrl()"
-            class="text-xs bg-emerald-600 text-white px-3 py-1.5 rounded-lg hover:bg-emerald-700 transition-colors shadow-sm">Save</button>
-          <button onclick="toggleUrlEditor()"
-            class="text-gray-400 hover:text-red-500 text-base leading-none transition-colors">×</button>
+          <!-- Stage 1: Binary not built -->
+          <div id="stage-binary"
+            class="inline-flex items-center justify-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg shadow-sm shrink-0">
+            <span class="relative flex h-2.5 w-2.5 shrink-0">
+              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+              <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
+            </span>
+            <span class="hidden sm:inline text-amber-700">Not Built</span>
+          </div>
+
+          <!-- Stage 2: Server run status -->
+          <div id="stage-status" title="Server is offline"
+            class="hidden items-center justify-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg shadow-sm shrink-0">
+            <span id="status-dot" class="flex items-center justify-center text-red-500 shrink-0">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 sm:w-3.5 sm:h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            </span>
+            <span id="status-label" class="hidden sm:inline text-red-600">Offline</span>
+          </div>
+
+          <!-- Stage 3: Llama UI link -->
+          <a id="server-link" href="{{ llama_server_url }}" target="_blank" rel="noopener" title="Open Llama UI"
+            class="hidden items-center justify-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg shadow-sm hover:bg-gray-50 hover:text-gray-900 transition-all group shrink-0">
+            <img src="/llama-icon.svg" alt="llama" class="w-4 h-4 sm:w-3.5 sm:h-3.5 shrink-0 animate-pulse">
+            <span class="hidden sm:inline text-emerald-700">Llama UI</span>
+            <svg xmlns="http://www.w3.org/2000/svg"
+              class="hidden sm:block w-3 h-3 opacity-50 transition-transform duration-200 group-hover:translate-x-0.5 shrink-0 text-emerald-700"
+              viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
+              stroke-linejoin="round">
+              <path d="M7 17l9.2-9.2M17 17V7H7" />
+            </svg>
+          </a>
+
         </div>
       </div>
-    </div>
+
+      <!-- Subtitle Row -->
+      <div class="pl-[52px] sm:pl-[60px]">
+        <p class="text-[11px] sm:text-xs text-gray-500 leading-none">Control plane & serving manager for llama.cpp</p>
+      </div>
+    </header>
 
     <div class="bg-white p-6 rounded-lg shadow">
-      <div class="flex items-center justify-between mb-4">
-        <div>
+      <div class="mb-4">
+        <div class="flex items-center justify-between mb-2">
           <h2 class="text-xl font-semibold">Model Files</h2>
-          <p class="text-xs text-gray-400 mt-1">Downloads are stored here. Add a serving preset below to expose a model.</p>
+          <div class="flex items-center gap-1.5 sm:gap-2">
+            <button id="btn-show-upload" onclick="openUploadModal()" title="Upload New Model"
+              class="inline-flex items-center justify-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg shadow-sm hover:bg-gray-50 hover:text-gray-900 transition-all group shrink-0">
+              <svg class="w-4 h-4 sm:w-3.5 sm:h-3.5 text-emerald-600 transition-transform group-hover:-translate-y-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              <span class="hidden sm:inline">Upload Model</span>
+            </button>
+            <button onclick="openHfModal()" title="Download from HF"
+              class="inline-flex items-center justify-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg shadow-sm hover:bg-gray-50 hover:text-gray-900 transition-all group shrink-0">
+              <svg class="w-4 h-4 sm:w-3.5 sm:h-3.5 text-blue-600 transition-transform group-hover:translate-y-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              <span class="hidden sm:inline">Download HF</span>
+            </button>
+          </div>
         </div>
-        <div class="flex items-center gap-2">
-          <button id="btn-show-upload" onclick="toggleUploadForm()"
-            class="bg-green-600 text-white text-sm px-3 py-1.5 rounded hover:bg-green-700 transition-colors">⬆ Upload New Model</button>
-          <button onclick="openHfModal()"
-            class="bg-blue-600 text-white text-sm px-3 py-1.5 rounded hover:bg-blue-700 transition-colors">⬇ Download from HF</button>
-        </div>
-      </div>
-
-      <!-- Upload form (hidden by default) -->
-      <div id="upload-form" class="hidden mb-4 p-4 bg-gray-50 border border-gray-200 rounded-lg">
-        <div class="flex items-center gap-3">
-          <input type="file" id="model-file" class="flex-1 border border-gray-300 p-1.5 rounded text-sm">
-          <button onclick="uploadFile()"
-            class="bg-green-600 text-white px-4 py-1.5 rounded hover:bg-green-700 text-sm whitespace-nowrap">Upload</button>
-          <button onclick="toggleUploadForm()" class="text-gray-400 hover:text-red-500 text-lg leading-none px-1"
-            title="Cancel">×</button>
-        </div>
-        <p id="upload-status" class="text-sm text-gray-600 mt-2"></p>
-        <p class="text-xs text-red-500 mt-1">* For models &gt;2 GB, direct Podman volume mounting is recommended over
-          web upload.</p>
+        <p class="text-xs text-gray-400">Downloads are stored here. Add a serving preset below to expose a model.</p>
       </div>
 
       <!-- Model list -->
@@ -100,8 +121,37 @@
       </div>
     </div>
 
+    <!-- Upload Model Modal -->
+    <div id="upload-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50"
+      onclick="closeModalOnBackdrop(event, 'upload-modal')">
+      <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-lg mx-4">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-lg font-semibold">Upload Model File</h3>
+          <button onclick="closeUploadModal()" class="text-gray-400 hover:text-red-500 text-xl leading-none">×</button>
+        </div>
+
+        <div class="space-y-3">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Select GGUF file</label>
+            <input type="file" id="model-file"
+              class="w-full border border-gray-300 rounded p-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400">
+          </div>
+          <p class="text-xs text-red-500">* For models &gt;2 GB, direct Podman volume mounting is recommended over web upload.</p>
+        </div>
+
+        <p id="upload-status" class="text-sm min-h-[1.25rem] mt-2"></p>
+        <div class="flex justify-end gap-2 mt-4">
+          <button onclick="closeUploadModal()"
+            class="px-4 py-1.5 text-sm rounded border border-gray-300 hover:bg-gray-100">Cancel</button>
+          <button id="upload-btn" onclick="uploadFile()"
+            class="bg-emerald-600 text-white px-4 py-1.5 text-sm rounded hover:bg-emerald-700">Upload</button>
+        </div>
+      </div>
+    </div>
+
     <!-- HF Download Modal -->
-    <div id="hf-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+    <div id="hf-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50"
+      onclick="closeModalOnBackdrop(event, 'hf-modal')">
       <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-lg mx-4">
         <div class="flex items-center justify-between mb-4">
           <h3 class="text-lg font-semibold">Download Model from Hugging Face</h3>
@@ -110,12 +160,15 @@
 
         <!-- Mode selector -->
         <div class="flex rounded border border-gray-200 overflow-hidden mb-4 text-sm">
-          <label class="flex-1 flex items-center justify-center gap-1.5 py-1.5 cursor-pointer bg-blue-50 border-r border-gray-200">
-            <input type="radio" name="hf-mode" id="hf-mode-repo" value="repo" checked onchange="hfSwitchMode()" class="accent-blue-600">
+          <label
+            class="flex-1 flex items-center justify-center gap-1.5 py-1.5 cursor-pointer bg-blue-50 border-r border-gray-200">
+            <input type="radio" name="hf-mode" id="hf-mode-repo" value="repo" checked onchange="hfSwitchMode()"
+              class="accent-blue-600">
             <span>Repo + Filename</span>
           </label>
           <label class="flex-1 flex items-center justify-center gap-1.5 py-1.5 cursor-pointer">
-            <input type="radio" name="hf-mode" id="hf-mode-url" value="url" onchange="hfSwitchMode()" class="accent-blue-600">
+            <input type="radio" name="hf-mode" id="hf-mode-url" value="url" onchange="hfSwitchMode()"
+              class="accent-blue-600">
             <span>URL</span>
           </label>
         </div>
@@ -123,12 +176,15 @@
         <!-- Repo + Filename panel -->
         <div id="hf-panel-repo" class="space-y-3">
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Repository <span class="text-gray-400 font-normal">(e.g. <code>bartowski/Llama-3.2-1B-Instruct-GGUF</code>)</span></label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Repository <span
+                class="text-gray-400 font-normal">(e.g.
+                <code>bartowski/Llama-3.2-1B-Instruct-GGUF</code>)</span></label>
             <input id="hf-repo" type="text" placeholder="owner/repo"
               class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Filename <span class="text-gray-400 font-normal">(.gguf)</span></label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Filename <span
+                class="text-gray-400 font-normal">(.gguf)</span></label>
             <input id="hf-filename" type="text" placeholder="model.Q4_K_M.gguf"
               class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
           </div>
@@ -137,7 +193,8 @@
         <!-- URL panel (hidden by default) -->
         <div id="hf-panel-url" class="hidden space-y-3">
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Hugging Face URL <span class="text-gray-400 font-normal">(blob or resolve link)</span></label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Hugging Face URL <span
+                class="text-gray-400 font-normal">(blob or resolve link)</span></label>
             <input id="hf-url" type="text" placeholder="https://huggingface.co/owner/repo/blob/main/model.gguf"
               class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
           </div>
@@ -150,13 +207,15 @@
             <span id="hf-progress-pct"></span>
           </div>
           <div class="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
-            <div id="hf-progress-bar" class="bg-blue-500 h-2 rounded-full transition-all duration-200" style="width:0%"></div>
+            <div id="hf-progress-bar" class="bg-blue-500 h-2 rounded-full transition-all duration-200" style="width:0%">
+            </div>
           </div>
           <div id="hf-progress-size" class="text-xs text-gray-400 text-right"></div>
         </div>
         <p id="hf-status" class="text-sm min-h-[1.25rem] mt-2"></p>
         <div class="flex justify-end gap-2 mt-4">
-          <button onclick="closeHfModal()" class="px-4 py-1.5 text-sm rounded border border-gray-300 hover:bg-gray-100">Cancel</button>
+          <button onclick="closeHfModal()"
+            class="px-4 py-1.5 text-sm rounded border border-gray-300 hover:bg-gray-100">Cancel</button>
           <button id="hf-download-btn" onclick="downloadFromHf()"
             class="bg-blue-600 text-white px-4 py-1.5 text-sm rounded hover:bg-blue-700">Download</button>
         </div>
@@ -164,19 +223,29 @@
     </div>
 
     <div class="bg-white p-6 rounded-lg shadow">
-      <div class="flex items-start justify-between gap-4 mb-4">
-        <div>
+      <div class="mb-4">
+        <div class="flex items-center justify-between gap-4 mb-2">
           <h2 class="text-xl font-semibold">Model Serving Presets</h2>
-          <p class="text-xs text-gray-400 mt-1">Backed by <code>data/models.ini</code>. Saving changes restarts llama-server.</p>
+          <div class="flex flex-wrap sm:flex-nowrap items-center justify-end gap-1.5 sm:gap-2 shrink-0">
+            <button type="button" onclick="refreshPresets()" id="btn-refresh-presets" title="Refresh Presets"
+              class="inline-flex items-center justify-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg shadow-sm hover:bg-gray-50 hover:text-gray-900 transition-all group shrink-0">
+              <svg class="w-4 h-4 sm:w-3.5 sm:h-3.5 text-blue-600 transition-transform group-hover:rotate-180" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+              <span class="hidden sm:inline">Refresh Presets</span>
+            </button>
+            <button type="button" onclick="openGlobalParamsModal()" title="Global Parameters"
+              class="inline-flex items-center justify-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg shadow-sm hover:bg-gray-50 hover:text-gray-900 transition-all group shrink-0">
+              <svg class="w-4 h-4 sm:w-3.5 sm:h-3.5 text-gray-500 transition-transform group-hover:rotate-90" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+              <span class="hidden sm:inline">Global Parameters</span>
+            </button>
+            <button type="button" onclick="openPresetModal()" title="Add Preset"
+              class="inline-flex items-center justify-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg shadow-sm hover:bg-gray-50 hover:text-gray-900 transition-all group shrink-0">
+              <svg class="w-4 h-4 sm:w-3.5 sm:h-3.5 text-purple-600 transition-transform group-hover:scale-110" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              <span class="hidden sm:inline">Add Preset</span>
+            </button>
+          </div>
         </div>
-        <div class="flex items-center gap-2 shrink-0">
-          <button type="button" onclick="refreshPresets()" id="btn-refresh-presets"
-            class="bg-blue-50 text-blue-700 text-sm px-3 py-1.5 rounded border border-blue-200 hover:bg-blue-100 transition-colors">↻ Refresh Presets</button>
-          <button type="button" onclick="openGlobalParamsModal()"
-            class="bg-gray-100 text-gray-700 text-sm px-3 py-1.5 rounded border border-gray-300 hover:bg-gray-200 transition-colors">Global Parameters</button>
-          <button type="button" onclick="openPresetModal()"
-            class="bg-purple-600 text-white text-sm px-3 py-1.5 rounded hover:bg-purple-700 transition-colors">＋ Add Preset</button>
-        </div>
+        <p class="text-xs text-gray-400">Backed by <code>data/models.ini</code>. Saving changes restarts llama-server.
+        </p>
       </div>
       <div id="presets-list" class="space-y-2">
         <p class="text-sm text-gray-400 italic">Loading presets…</p>
@@ -220,7 +289,8 @@
           <p id="preset-modal-status" class="text-sm min-h-[1.25rem]"></p>
         </div>
         <div class="flex justify-end gap-2 px-6 py-4 border-t border-gray-200">
-          <button onclick="closePresetModal()" class="px-4 py-1.5 text-sm rounded border border-gray-300 hover:bg-gray-100">Cancel</button>
+          <button onclick="closePresetModal()"
+            class="px-4 py-1.5 text-sm rounded border border-gray-300 hover:bg-gray-100">Cancel</button>
           <button id="save-preset-btn" onclick="savePreset()"
             class="bg-purple-600 text-white px-4 py-1.5 text-sm rounded hover:bg-purple-700">Save &amp; Restart</button>
         </div>
@@ -239,7 +309,8 @@
           <div class="flex items-center gap-2">
             <button onclick="openHelp()" title="llama-server --help"
               class="w-6 h-6 rounded-full bg-gray-200 hover:bg-gray-300 text-gray-500 text-xs font-bold">?</button>
-            <button onclick="closeGlobalParamsModal()" class="text-gray-400 hover:text-red-500 text-xl leading-none">×</button>
+            <button onclick="closeGlobalParamsModal()"
+              class="text-gray-400 hover:text-red-500 text-xl leading-none">×</button>
           </div>
         </div>
         <div class="p-6 overflow-y-auto">
@@ -251,7 +322,8 @@
           <p id="global-modal-status" class="text-sm min-h-[1.25rem] mt-3"></p>
         </div>
         <div class="flex justify-end gap-2 px-6 py-4 border-t border-gray-200">
-          <button onclick="closeGlobalParamsModal()" class="px-4 py-1.5 text-sm rounded border border-gray-300 hover:bg-gray-100">Cancel</button>
+          <button onclick="closeGlobalParamsModal()"
+            class="px-4 py-1.5 text-sm rounded border border-gray-300 hover:bg-gray-100">Cancel</button>
           <button id="save-global-btn" onclick="saveGlobalParams()"
             class="bg-purple-600 text-white px-4 py-1.5 text-sm rounded hover:bg-purple-700">Save &amp; Restart</button>
         </div>
@@ -276,15 +348,15 @@
         placeholder="e.g. -DGGML_NATIVE=ON -DGGML_LTO=ON -DBUILD_SHARED_LIBS=OFF"
         class="w-full rounded border border-gray-300 px-3 py-2 text-sm font-mono text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-300 resize-y mb-3"></textarea>
 
-      <label class="block text-xs font-semibold text-gray-700 mb-1">Preset Packages <span class="font-normal text-gray-400">(installed before the next build)</span></label>
+      <label class="block text-xs font-semibold text-gray-700 mb-1">Preset Packages <span
+          class="font-normal text-gray-400">(installed before the next build)</span></label>
       <input id="extra-packages" type="text" spellcheck="false" oninput="syncCmakePresetHighlight()"
         placeholder="Selected automatically by a preset; optional for custom builds"
         class="w-full rounded border border-gray-300 px-3 py-1.5 text-sm font-mono text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-300">
 
       <div class="flex gap-3 mt-3">
         <button id="btn-build" type="button" onclick="buildLlama()"
-          class="bg-blue-600 text-white text-sm px-4 py-1.5 rounded hover:bg-blue-700 transition-colors">Build
-          Latest</button>
+          class="bg-blue-600 text-white text-sm px-4 py-1.5 rounded hover:bg-blue-700 transition-colors">Save &amp; Build</button>
         <span id="build-status" class="text-xs text-gray-500 italic self-center"></span>
       </div>
     </div>
@@ -359,8 +431,10 @@
       if (!document.getElementById('help-modal').classList.contains('hidden')) return closeHelp();
       if (!document.getElementById('preset-modal').classList.contains('hidden')) return closePresetModal();
       if (!document.getElementById('global-params-modal').classList.contains('hidden')) return closeGlobalParamsModal();
+      if (!document.getElementById('upload-modal').classList.contains('hidden') &&
+        !document.getElementById('upload-btn').disabled) closeUploadModal();
       if (!document.getElementById('hf-modal').classList.contains('hidden') &&
-          !document.getElementById('hf-download-btn').disabled) closeHfModal();
+        !document.getElementById('hf-download-btn').disabled) closeHfModal();
     });
 
     function switchTab(tab) {
@@ -414,31 +488,73 @@
       }
     }
 
+    function openUploadModal() {
+      const fileInput = document.getElementById('model-file');
+      fileInput.value = '';
+      fileInput.disabled = false;
+      const statusEl = document.getElementById('upload-status');
+      statusEl.innerText = '';
+      statusEl.className = 'text-sm min-h-[1.25rem] mt-2';
+      const btn = document.getElementById('upload-btn');
+      btn.disabled = false;
+      const cancelBtn = document.querySelector('#upload-modal button[onclick="closeUploadModal()"]');
+      if (cancelBtn) cancelBtn.disabled = false;
+      document.getElementById('upload-modal').classList.remove('hidden');
+    }
+
+    function closeUploadModal() {
+      const btn = document.getElementById('upload-btn');
+      if (btn && btn.disabled) return;
+      document.getElementById('upload-modal').classList.add('hidden');
+    }
+
     async function uploadFile() {
       const fileInput = document.getElementById('model-file');
-      if (!fileInput.files[0]) return;
+      const statusEl = document.getElementById('upload-status');
+      const btn = document.getElementById('upload-btn');
+      const cancelBtn = document.querySelector('#upload-modal button[onclick="closeUploadModal()"]');
+
+      if (!fileInput.files[0]) {
+        statusEl.innerText = 'Please select a file to upload.';
+        statusEl.className = 'text-sm text-red-500 min-h-[1.25rem] mt-2';
+        return;
+      }
 
       const formData = new FormData();
       formData.append('file', fileInput.files[0]);
 
-      document.getElementById('upload-status').innerText = "Uploading…";
-      const res = await fetch('/api/upload', { method: 'POST', body: formData });
-      const data = await res.json();
-      document.getElementById('upload-status').innerText = data.message;
-      if (data.success) {
-        fileInput.value = '';
-        if (!document.getElementById('upload-form').classList.contains('hidden')) {
-          toggleUploadForm();
-        }
-        await loadModels();
-        await loadModelPresets();
-        openPresetModal(null, `data/models/${data.filename}`);
-      }
-    }
+      btn.disabled = true;
+      if (cancelBtn) cancelBtn.disabled = true;
+      fileInput.disabled = true;
 
-    function toggleUploadForm() {
-      const form = document.getElementById('upload-form');
-      form.classList.toggle('hidden');
+      statusEl.innerText = 'Uploading…';
+      statusEl.className = 'text-sm text-gray-600 min-h-[1.25rem] mt-2';
+
+      try {
+        const res = await fetch('/api/upload', { method: 'POST', body: formData });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          statusEl.innerText = data.message;
+          statusEl.className = 'text-sm text-green-600 min-h-[1.25rem] mt-2';
+          fileInput.value = '';
+          await loadModels();
+          await loadModelPresets();
+          closeUploadModal();
+          openPresetModal(null, `data/models/${data.filename}`);
+        } else {
+          statusEl.innerText = data.message || 'Upload failed.';
+          statusEl.className = 'text-sm text-red-500 min-h-[1.25rem] mt-2';
+          btn.disabled = false;
+          if (cancelBtn) cancelBtn.disabled = false;
+          fileInput.disabled = false;
+        }
+      } catch (e) {
+        statusEl.innerText = 'Upload request failed: ' + e;
+        statusEl.className = 'text-sm text-red-500 min-h-[1.25rem] mt-2';
+        btn.disabled = false;
+        if (cancelBtn) cancelBtn.disabled = false;
+        fileInput.disabled = false;
+      }
     }
 
     function openHfModal() {
@@ -494,8 +610,8 @@
       const cancelBtn = document.querySelector('#hf-modal button[onclick="closeHfModal()"]');
       const modeRadios = document.querySelectorAll('#hf-modal input[type=radio]');
       const progressBlock = document.getElementById('hf-progress-block');
-      const progressBar  = document.getElementById('hf-progress-bar');
-      const progressPct  = document.getElementById('hf-progress-pct');
+      const progressBar = document.getElementById('hf-progress-bar');
+      const progressPct = document.getElementById('hf-progress-pct');
       const progressSize = document.getElementById('hf-progress-size');
       const progressLabel = document.getElementById('hf-progress-label');
       const isUrl = document.getElementById('hf-mode-url').checked;
@@ -547,7 +663,7 @@
       try {
         const res = await fetch('/api/download', {
           method: 'POST',
-          headers: {'Content-Type': 'application/json'},
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ repo, filename })
         });
         const reader = res.body.getReader();
@@ -710,25 +826,34 @@
         const model = modelParam(preset);
         const parameterCount = (preset.params || []).filter(param => param.key !== 'model').length;
         const status = preset.model_exists
-          ? '<span class="text-xs font-medium text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5">Model found</span>'
-          : '<span class="text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">Model file missing</span>';
+          ? '<span title="Model found" class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-600 cursor-help shrink-0"><svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>'
+          : '<span title="Model file missing" class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-50 border border-amber-200 text-amber-600 cursor-help shrink-0"><svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>';
         return `
-          <div class="flex items-center justify-between gap-4 p-3 border border-gray-200 rounded-lg hover:border-gray-300 transition-colors">
-            <div class="min-w-0">
-              <div class="flex items-center gap-2">
-                <h3 class="text-sm font-semibold text-gray-800 font-mono truncate">${escHtml(preset.name)}</h3>
-                ${status}
-              </div>
-              <p class="text-xs text-gray-500 font-mono truncate mt-1">${escHtml(model || 'No model path configured')}</p>
-              <p class="text-xs text-gray-400 mt-1">${parameterCount} preset parameter${parameterCount === 1 ? '' : 's'}</p>
+          <div class="p-3 border border-gray-200 rounded-lg hover:border-gray-300 transition-colors">
+            <div class="flex items-center gap-2">
+              <h3 class="text-sm font-semibold text-gray-800 font-mono truncate">${escHtml(preset.name)}</h3>
+              ${status}
             </div>
-            <div class="flex items-center gap-2 shrink-0">
-              <button type="button" onclick="duplicatePreset(${index})"
-                class="text-xs px-3 py-1.5 rounded border border-gray-300 hover:bg-gray-100" title="Duplicate preset with running number suffix">Duplicate</button>
-              <button type="button" onclick="openPresetModal(${index})"
-                class="text-xs px-3 py-1.5 rounded border border-gray-300 hover:bg-gray-100">Edit</button>
-              <button type="button" onclick="deletePreset(${index})"
-                class="text-xs px-3 py-1.5 rounded border border-red-200 text-red-600 hover:bg-red-50">Delete</button>
+            <p class="text-xs text-gray-500 font-mono truncate mt-1">${escHtml(model || 'No model path configured')}</p>
+            <div class="flex items-center justify-between gap-4 mt-2">
+              <p class="text-xs text-gray-400">${parameterCount} preset parameter${parameterCount === 1 ? '' : 's'}</p>
+              <div class="flex items-center gap-1 sm:gap-2 shrink-0">
+                <button type="button" onclick="duplicatePreset(${index})"
+                  class="text-xs px-2 sm:px-3 py-1.5 rounded border border-gray-300 hover:bg-gray-100 flex items-center justify-center" title="Duplicate preset with running number suffix">
+                  <span class="sm:hidden">❐</span>
+                  <span class="hidden sm:inline">Duplicate</span>
+                </button>
+                <button type="button" onclick="openPresetModal(${index})"
+                  class="text-xs px-2 sm:px-3 py-1.5 rounded border border-gray-300 hover:bg-gray-100 flex items-center justify-center" title="Edit preset">
+                  <span class="sm:hidden">✎</span>
+                  <span class="hidden sm:inline">Edit</span>
+                </button>
+                <button type="button" onclick="deletePreset(${index})"
+                  class="text-xs px-2 sm:px-3 py-1.5 rounded border border-red-200 text-red-600 hover:bg-red-50 flex items-center justify-center" title="Delete preset">
+                  <span class="sm:hidden">🗑</span>
+                  <span class="hidden sm:inline">Delete</span>
+                </button>
+              </div>
             </div>
           </div>`;
       }).join('');
@@ -777,6 +902,8 @@
       if (event.target !== document.getElementById(modalId)) return;
       if (modalId === 'preset-modal') closePresetModal();
       if (modalId === 'global-params-modal') closeGlobalParamsModal();
+      if (modalId === 'upload-modal' && !document.getElementById('upload-btn').disabled) closeUploadModal();
+      if (modalId === 'hf-modal' && !document.getElementById('hf-download-btn').disabled) closeHfModal();
     }
 
     async function persistModelPresets(nextConfig, statusElement) {
@@ -971,7 +1098,7 @@
     // ── Status pipeline ──────────────────────────────────────────────────
     function setVisible(el, show) {
       if (show) { el.classList.remove('hidden'); el.classList.add('inline-flex'); }
-      else      { el.classList.add('hidden'); el.classList.remove('inline-flex'); }
+      else { el.classList.add('hidden'); el.classList.remove('inline-flex'); }
     }
 
     async function pollStatus() {
@@ -981,63 +1108,19 @@
 
         const stageBinary = document.getElementById('stage-binary');
         const stageStatus = document.getElementById('stage-status');
-        const statusDot   = document.getElementById('status-dot');
+        const statusDot = document.getElementById('status-dot');
         const statusLabel = document.getElementById('status-label');
-        const serverLink  = document.getElementById('server-link');
-        const btnEditUrl  = document.getElementById('btn-edit-url');
+        const serverLink = document.getElementById('server-link');
 
         // Stage 1: Binary not built → amber pill
         setVisible(stageBinary, !data.binary_built);
 
-        // Stage 2: Run status (only when binary exists)
-        setVisible(stageStatus, data.binary_built);
-        if (data.binary_built) {
-          if (data.server_running) {
-            stageStatus.className = 'inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/80 shadow-sm';
-            statusDot.innerHTML = '<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span><span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>';
-            statusLabel.textContent = 'Running';
-          } else {
-            stageStatus.className = 'inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-red-50 text-red-600 border border-red-200/80 shadow-sm';
-            statusDot.innerHTML = '<span class="relative inline-flex rounded-full h-2 w-2 bg-red-400"></span>';
-            statusLabel.textContent = 'Stopped';
-          }
-        }
+        // Stage 2: Run status (only when binary exists AND stopped)
+        setVisible(stageStatus, data.binary_built && !data.server_running);
 
-        // Stage 3: Server link + edit button (only when running)
+        // Stage 3: Llama UI link (only when running)
         setVisible(serverLink, data.binary_built && data.server_running);
-        setVisible(btnEditUrl, data.binary_built && data.server_running);
       } catch (_) { }
-    }
-
-    // ── Server URL editor ────────────────────────────────────────────────
-    function toggleUrlEditor() {
-      const editor = document.getElementById('url-editor');
-      const isHidden = editor.classList.contains('hidden');
-      if (isHidden) {
-        editor.classList.remove('hidden');
-        editor.classList.add('inline-flex');
-        document.getElementById('url-input').focus();
-      } else {
-        editor.classList.add('hidden');
-        editor.classList.remove('inline-flex');
-      }
-    }
-
-    async function saveServerUrl() {
-      const url = document.getElementById('url-input').value.trim();
-      if (!url) return;
-      try {
-        await fetch('/api/server-url', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url })
-        });
-        // Update the link href immediately
-        document.getElementById('server-link').href = url;
-        toggleUrlEditor();
-      } catch (e) {
-        alert('Failed to save URL: ' + e);
-      }
     }
 
     // ── Log polling ──────────────────────────────────────────────────────

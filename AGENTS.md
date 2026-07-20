@@ -24,7 +24,9 @@ llama-controller/
 │   ├── server.py                  # Flask app — the entire backend
 │   ├── requirements.txt           # Python deps: Flask, Werkzeug
 │   ├── static/
-│   │   └── favicon.svg            # App favicon
+│   │   ├── docker.svg             # Docker logo icon
+│   │   ├── favicon.svg            # App favicon
+│   │   └── github.svg             # GitHub logo icon
 │   └── templates/
 │       └── index.html             # Single-page UI (Jinja2 + Tailwind CDN + vanilla JS)
 ├── config.default.json            # Default config — seeded into data/config.json on first run
@@ -102,8 +104,6 @@ docker-compose.yml                 # User's local compose (copied from .example)
 ## models.ini Schema
 
 ```ini
-version = 1
-
 [*]                              # Global parameters inherited by every preset
 threads = 4
 ctx-size = 8192
@@ -150,7 +150,7 @@ All routes are defined in `server/server.py`. All API responses are JSON.
 - **Single file:** `server/templates/index.html` — Jinja2 template with inline `<script>`.
 - **Styling:** Tailwind CSS via CDN (`<script src="https://cdn.tailwindcss.com">`). No build step.
 - **Polling:** Status is polled every 3s; logs every 2s; model files and presets every 10s via `setInterval` + `fetch`.
-- **Preset UI:** Serving presets are listed in their own panel. Add/edit uses a modal, global `[*]` parameters use a separate modal, and missing model files show a warning badge.
+- **Preset UI:** Serving presets are listed in their own panel. Add/edit uses a modal, global `[*]` parameters use a separate modal, and model availability is indicated with tooltip icons.
 - **Template variables:** `{{ version }}` and `{{ llama_server_url }}` are injected by Flask.
 - **No frameworks:** Vanilla JS only. DOM manipulation via `getElementById` / `innerHTML`.
 

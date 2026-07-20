@@ -1,6 +1,6 @@
 # Variables
 IMAGE_NAME = vm75/llama-controller
-PORT_UI = 5000
+LLAMA_CONTROLLER_PORT ?= 5000
 
 .PHONY: all build run test stop clean logs
 
@@ -16,7 +16,7 @@ build:
 run:
 	@echo "Starting services with podman compose..."
 	podman compose up -d
-	@echo "Services started! Access the UI at http://localhost:$(PORT_UI)"
+	@echo "Services started! Access the UI at http://localhost:$(LLAMA_CONTROLLER_PORT)"
 
 # Test if the Web UI is responding
 test:
@@ -24,8 +24,8 @@ test:
 	podman compose ps
 	@echo "Pinging the Web UI..."
 	@sleep 2
-	curl -s -f http://localhost:$(PORT_UI) > /dev/null && \
-		echo "✅ Test Passed: Web UI is accessible on port $(PORT_UI)!" || \
+	curl -s -f http://localhost:$(LLAMA_CONTROLLER_PORT) > /dev/null && \
+		echo "✅ Test Passed: Web UI is accessible on port $(LLAMA_CONTROLLER_PORT)!" || \
 		echo "❌ Test Failed: Web UI did not respond."
 
 # Stop the container

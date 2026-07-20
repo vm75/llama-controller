@@ -157,7 +157,7 @@ def save_model_presets(global_params, presets):
       'params': _validate_params(preset.get('params', [])),
     })
 
-  lines = ['version = 1', '', '[*]']
+  lines = ['[*]']
   for entry in global_params:
     lines.append(f"{entry['key']} = {entry['value']}")
   for preset in normalized_presets:
@@ -203,8 +203,7 @@ def stop_llama():
 
 @app.route('/')
 def index():
-  config = load_config()
-  llama_server_url = config.get('llama_server_url', 'http://localhost:8080')
+  llama_server_url = os.environ.get('LLAMA_SERVER_URL', 'http://localhost:8080')
   return render_template('index.html', version=__version__, llama_server_url=llama_server_url)
 
 @app.route('/favicon.ico')
@@ -227,7 +226,7 @@ def get_config():
 def llama_help():
   server_bin = os.path.join(LLAMA_REPO, 'build', 'bin', 'llama-server')
   if not os.path.exists(server_bin):
-    return jsonify({"help": "(Binary not built yet — click Build Latest first.)"})
+    return jsonify({"help": "(Binary not built yet — click Save & Build first.)"})
   result = subprocess.run(
     [server_bin, '--help'],
     capture_output=True, text=True, timeout=10
@@ -247,8 +246,6 @@ def update_config():
     data['extra_packages'] = existing.get('extra_packages', '')
   if 'cmake_presets' not in data:
     data['cmake_presets'] = existing.get('cmake_presets', [])
-  if 'llama_server_url' not in data:
-    data['llama_server_url'] = existing.get('llama_server_url', 'http://localhost:8080')
   save_config(data)
   return jsonify({"success": True, "message": "Configuration saved."})
 
@@ -349,18 +346,6 @@ def refresh_model_presets():
     "removed_count": removed_count,
     "message": f"Refreshed presets (added {added_count}, removed {removed_count}). {restart_msg}"
   })
-
-@app.route('/api/server-url', methods=['POST'])
-def set_server_url():
-  """Update the configurable llama-server link URL without restarting."""
-  data = request.json
-  url = (data.get('url') or '').strip()
-  if not url:
-    return jsonify({"success": False, "message": "URL cannot be empty"})
-  config = load_config()
-  config['llama_server_url'] = url
-  save_config(config)
-  return jsonify({"success": True, "message": "URL saved"})
 
 @app.route('/api/status')
 def get_status():

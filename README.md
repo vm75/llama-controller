@@ -60,7 +60,7 @@ podman-compose up -d
 
 The Web UI will be available at `http://localhost:5000`. The llama-server inference API runs on `http://localhost:8080`.
 
-Choose a build preset in the Web UI before building. A preset fills in both the CMake flags and any apt packages needed by that backend; clicking **Build Latest** saves both values to `data/config.json` before starting the build. The fields remain editable for custom builds. There is no separate Docker package setting.
+Choose a build preset in the Web UI before building. A preset fills in both the CMake flags and any apt packages needed by that backend; clicking **Save & Build** saves both values to `data/config.json` before starting the build. The fields remain editable for custom builds. There is no separate Docker package setting.
 
 ### Using Docker Run
 
@@ -86,8 +86,6 @@ Models are stored in `./data/models/` on the host (mounted to `/home/llama/app/d
 Model files are not automatically served. After an upload or download, the UI opens the preset editor with that file selected; save it to expose the model or cancel to keep it as storage only. In **Model Serving Presets**, you can also add a named preset manually, choose its local model file, duplicate an existing preset (auto-generating a unique running number suffix), or use **Refresh Presets** to auto-add presets for unassigned GGUF files and remove presets whose files are missing. The UI writes a section like this to `./data/models.ini`:
 
 ```ini
-version = 1
-
 [*]
 threads = 4
 ctx-size = 8192
