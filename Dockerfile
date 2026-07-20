@@ -23,8 +23,9 @@ RUN python3 -m venv venv && \
 
 # Copy application files
 COPY --chown=llama:llama server/ server/
-# Ship default config as the seed; the live config lives in data/config.json
+# Ship default seeds; live config and presets live under data/.
 COPY --chown=llama:llama config.default.json .
+COPY --chown=llama:llama models.ini.example .
 COPY --chown=llama:llama VERSION .
 
 # Pre-create the data directory so the volume mount lands cleanly

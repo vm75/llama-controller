@@ -5,20 +5,23 @@
 
 A lightweight, minimal control plane for [`llama.cpp`](https://github.com/ggerganov/llama.cpp). It runs inside a rootless Podman/Docker container and uses a Python Flask backend paired with a vanilla HTML/JS/Tailwind frontend.
 
-It manages compiling `llama.cpp` from source, handling model uploads, and controlling the process lifecycle of `llama-server` — all from a single-page web UI.
+It manages compiling `llama.cpp` from source, downloading model files, configuring model-serving presets, and controlling the process lifecycle of `llama-server` — all from a single-page web UI.
 
 ## Features
 
 - **No Bloat:** Built with vanilla HTML/JS and Tailwind CSS via CDN. Backend is a single Python Flask file. No Node.js, Webpack, React, databases, or complex setup.
-- **Dynamic Configuration:** Configure `llama.cpp` CMake build parameters (CPU, CUDA, ROCm, Vulkan presets) and runtime `llama-server` flags directly from the UI.
+- **Model Presets:** Add, edit, duplicate, and delete `llama-server` model presets from the UI. Refresh presets automatically adds missing GGUF files and cleans up stale presets. Preset and global parameters are stored in `data/models.ini`.
+- **Decoupled Model Storage:** Downloading, uploading, or deleting a GGUF file does not restart or change the models served by `llama-server`.
+- **Dynamic Configuration:** Configure `llama.cpp` CMake build parameters (CPU, CUDA, ROCm, Vulkan presets) and model parameters directly from the UI.
 - **Process Management:** Start, stop, and monitor the `llama-server` lifecycle. Logs stream in real-time.
 - **Rootless Podman Support:** Designed from the ground up to be compatible with rootless Podman containers.
 
 ## How It Works
 
 1. **Build** — The UI clones `llama.cpp` from GitHub, runs `cmake` with your configured flags, and builds the `llama-server` binary inside the container.
-2. **Configure** — Runtime parameters (`--threads`, `--ctx-size`, `--model`, etc.) are stored in a `config.json` and passed as CLI flags to `llama-server`.
-3. **Run** — The Flask backend manages the `llama-server` process via `subprocess`. Saving config auto-restarts the server.
+2. **Download** — GGUF files are stored independently in `data/models/`; file changes do not restart the server.
+3. **Configure** — Serving presets and inherited global parameters are stored in `data/models.ini` using the native `llama.cpp` model-preset format.
+4. **Run** — The Flask backend launches `llama-server --models-preset data/models.ini`. Saving preset changes restarts the server.
 
 ## Quick Start
 
@@ -67,9 +70,31 @@ docker run -d \
 ## Models
 
 Models are stored in `./data/models/` on the host (mounted to `/home/llama/app/data/models` inside the container). You can:
+
 - **Download from Hugging Face** — directly download `.gguf` files via the UI using a repo/filename or URL.
 - **Upload via the web UI** — works well for smaller models.
 - **Copy directly** — for models >2 GB, place `.gguf` files straight into `./data/models/`.
+
+Model files are not automatically served. After an upload or download, the UI opens the preset editor with that file selected; save it to expose the model or cancel to keep it as storage only. In **Model Serving Presets**, you can also add a named preset manually, choose its local model file, duplicate an existing preset (auto-generating a unique running number suffix), or use **Refresh Presets** to auto-add presets for unassigned GGUF files and remove presets whose files are missing. The UI writes a section like this to `./data/models.ini`:
+
+```ini
+version = 1
+
+[*]
+threads = 4
+ctx-size = 8192
+
+[coding-model]
+model = data/models/coding-model.Q4_K_M.gguf
+n-gpu-layers = 99
+temp = 0.2
+```
+
+Use the **Global Parameters** button in the preset section to edit the `[*]` settings inherited by every preset. A preset remains editable if its model file is missing, and the UI marks it with a warning until the path is repaired or the file is restored.
+
+Deleting a model file also removes every serving preset that references it, then restarts `llama-server` so the router immediately reflects the new preset list.
+
+On upgrade, existing runtime `params` from `data/config.json` are migrated to the `[*]` section when `data/models.ini` is first created. Boolean flags are written as `true`.
 
 ## Development
 

@@ -68,7 +68,10 @@
 
     <div class="bg-white p-6 rounded-lg shadow">
       <div class="flex items-center justify-between mb-4">
-        <h2 class="text-xl font-semibold">Models</h2>
+        <div>
+          <h2 class="text-xl font-semibold">Model Files</h2>
+          <p class="text-xs text-gray-400 mt-1">Downloads are stored here. Add a serving preset below to expose a model.</p>
+        </div>
         <div class="flex items-center gap-2">
           <button id="btn-show-upload" onclick="toggleUploadForm()"
             class="bg-green-600 text-white text-sm px-3 py-1.5 rounded hover:bg-green-700 transition-colors">⬆ Upload New Model</button>
@@ -161,27 +164,98 @@
     </div>
 
     <div class="bg-white p-6 rounded-lg shadow">
-      <div class="flex items-center justify-between mb-1">
-        <h2 class="text-xl font-semibold">llama-server Parameters <span
-            class="text-sm font-normal text-gray-400">(Auto-restarts on Save)</span></h2>
-        <button onclick="openHelp()" title="llama-server --help"
-          class="flex-shrink-0 w-6 h-6 rounded-full bg-gray-200 hover:bg-gray-300 text-gray-500 text-xs font-bold leading-none flex items-center justify-center transition-colors">?</button>
+      <div class="flex items-start justify-between gap-4 mb-4">
+        <div>
+          <h2 class="text-xl font-semibold">Model Serving Presets</h2>
+          <p class="text-xs text-gray-400 mt-1">Backed by <code>data/models.ini</code>. Saving changes restarts llama-server.</p>
+        </div>
+        <div class="flex items-center gap-2 shrink-0">
+          <button type="button" onclick="refreshPresets()" id="btn-refresh-presets"
+            class="bg-blue-50 text-blue-700 text-sm px-3 py-1.5 rounded border border-blue-200 hover:bg-blue-100 transition-colors">↻ Refresh Presets</button>
+          <button type="button" onclick="openGlobalParamsModal()"
+            class="bg-gray-100 text-gray-700 text-sm px-3 py-1.5 rounded border border-gray-300 hover:bg-gray-200 transition-colors">Global Parameters</button>
+          <button type="button" onclick="openPresetModal()"
+            class="bg-purple-600 text-white text-sm px-3 py-1.5 rounded hover:bg-purple-700 transition-colors">＋ Add Preset</button>
+        </div>
       </div>
-      <p class="text-xs text-gray-400 mb-4">Excluded from form (hardcoded): <code>--models-dir</code>,
-        <code>--host</code>, <code>--port</code>
-      </p>
-
-      <div id="params-list" class="space-y-2"></div>
-
-      <div class="flex gap-3 mt-4">
-        <button type="button" onclick="addParamRow()"
-          class="bg-gray-100 text-gray-700 text-sm px-3 py-1.5 rounded border border-gray-300 hover:bg-gray-200 transition-colors">＋
-          Add Parameter</button>
-        <button type="button" onclick="saveConfig()"
-          class="bg-purple-600 text-white text-sm px-4 py-1.5 rounded hover:bg-purple-700 transition-colors">Save &amp;
-          Restart</button>
+      <div id="presets-list" class="space-y-2">
+        <p class="text-sm text-gray-400 italic">Loading presets…</p>
       </div>
-      <p id="config-status" class="text-sm text-gray-600 mt-2"></p>
+      <p id="preset-status" class="text-sm text-gray-600 mt-3"></p>
+    </div>
+
+    <!-- Add/edit model preset modal -->
+    <div id="preset-modal" class="hidden fixed inset-0 z-50 items-center justify-center bg-black/50 p-4"
+      onclick="closeModalOnBackdrop(event, 'preset-modal')">
+      <div class="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+          <h3 id="preset-modal-title" class="text-lg font-semibold">Add Serving Preset</h3>
+          <button onclick="closePresetModal()" class="text-gray-400 hover:text-red-500 text-xl leading-none">×</button>
+        </div>
+        <div class="p-6 overflow-y-auto space-y-5">
+          <div class="grid sm:grid-cols-2 gap-4">
+            <div>
+              <label for="preset-name" class="block text-sm font-medium text-gray-700 mb-1">Preset name</label>
+              <input id="preset-name" type="text" placeholder="coding-model"
+                class="w-full border border-gray-300 rounded px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-purple-400">
+            </div>
+            <div>
+              <label for="preset-model" class="block text-sm font-medium text-gray-700 mb-1">Model file</label>
+              <input id="preset-model" type="text" list="model-file-options" placeholder="data/models/model.gguf"
+                class="w-full border border-gray-300 rounded px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-purple-400">
+              <datalist id="model-file-options"></datalist>
+            </div>
+          </div>
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <div>
+                <h4 class="text-sm font-semibold text-gray-700">Preset parameters</h4>
+                <p class="text-xs text-gray-400">Use llama-server keys without leading dashes.</p>
+              </div>
+              <button type="button" onclick="addIniParamRow('preset-params-list')"
+                class="text-xs px-2.5 py-1 rounded border border-gray-300 hover:bg-gray-100">＋ Add Parameter</button>
+            </div>
+            <div id="preset-params-list" class="space-y-2"></div>
+          </div>
+          <p id="preset-modal-status" class="text-sm min-h-[1.25rem]"></p>
+        </div>
+        <div class="flex justify-end gap-2 px-6 py-4 border-t border-gray-200">
+          <button onclick="closePresetModal()" class="px-4 py-1.5 text-sm rounded border border-gray-300 hover:bg-gray-100">Cancel</button>
+          <button id="save-preset-btn" onclick="savePreset()"
+            class="bg-purple-600 text-white px-4 py-1.5 text-sm rounded hover:bg-purple-700">Save &amp; Restart</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Global models.ini parameters modal -->
+    <div id="global-params-modal" class="hidden fixed inset-0 z-50 items-center justify-center bg-black/50 p-4"
+      onclick="closeModalOnBackdrop(event, 'global-params-modal')">
+      <div class="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+          <div>
+            <h3 class="text-lg font-semibold">Global Model Parameters</h3>
+            <p class="text-xs text-gray-400 mt-1">Written to <code>[*]</code> and inherited by every preset.</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="openHelp()" title="llama-server --help"
+              class="w-6 h-6 rounded-full bg-gray-200 hover:bg-gray-300 text-gray-500 text-xs font-bold">?</button>
+            <button onclick="closeGlobalParamsModal()" class="text-gray-400 hover:text-red-500 text-xl leading-none">×</button>
+          </div>
+        </div>
+        <div class="p-6 overflow-y-auto">
+          <div class="flex justify-end mb-2">
+            <button type="button" onclick="addIniParamRow('global-params-list')"
+              class="text-xs px-2.5 py-1 rounded border border-gray-300 hover:bg-gray-100">＋ Add Parameter</button>
+          </div>
+          <div id="global-params-list" class="space-y-2"></div>
+          <p id="global-modal-status" class="text-sm min-h-[1.25rem] mt-3"></p>
+        </div>
+        <div class="flex justify-end gap-2 px-6 py-4 border-t border-gray-200">
+          <button onclick="closeGlobalParamsModal()" class="px-4 py-1.5 text-sm rounded border border-gray-300 hover:bg-gray-100">Cancel</button>
+          <button id="save-global-btn" onclick="saveGlobalParams()"
+            class="bg-purple-600 text-white px-4 py-1.5 text-sm rounded hover:bg-purple-700">Save &amp; Restart</button>
+        </div>
+      </div>
     </div>
 
     <!-- CMake Build Parameters panel -->
@@ -245,6 +319,9 @@
   <script>
     let activeTab = 'server';
     let helpLoaded = false;
+    let availableModels = [];
+    let presetConfig = { version: '1', global_params: [], presets: [] };
+    let editingPresetIndex = null;
 
     // ── Help modal ───────────────────────────────────────────────────────────
     async function openHelp() {
@@ -275,7 +352,14 @@
       if (event.target === document.getElementById('help-modal')) closeHelp();
     }
 
-    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeHelp(); });
+    document.addEventListener('keydown', e => {
+      if (e.key !== 'Escape') return;
+      if (!document.getElementById('help-modal').classList.contains('hidden')) return closeHelp();
+      if (!document.getElementById('preset-modal').classList.contains('hidden')) return closePresetModal();
+      if (!document.getElementById('global-params-modal').classList.contains('hidden')) return closeGlobalParamsModal();
+      if (!document.getElementById('hf-modal').classList.contains('hidden') &&
+          !document.getElementById('hf-download-btn').disabled) closeHfModal();
+    });
 
     function switchTab(tab) {
       activeTab = tab;
@@ -320,11 +404,12 @@
       document.getElementById('upload-status').innerText = data.message;
       if (data.success) {
         fileInput.value = '';
-        setTimeout(() => {
+        if (!document.getElementById('upload-form').classList.contains('hidden')) {
           toggleUploadForm();
-          document.getElementById('upload-status').innerText = '';
-        }, 2000);
-        loadModels();
+        }
+        await loadModels();
+        await loadModelPresets();
+        openPresetModal(null, `data/models/${data.filename}`);
       }
     }
 
@@ -462,8 +547,10 @@
               if (ev.success) {
                 statusEl.innerText = ev.message;
                 statusEl.className = 'text-sm text-green-600 min-h-[1.25rem] mt-2';
-                loadModels();
-                setTimeout(closeHfModal, 2500);
+                await loadModels();
+                await loadModelPresets();
+                closeHfModal();
+                openPresetModal(null, `data/models/${ev.filename}`);
               } else {
                 statusEl.innerText = ev.message;
                 statusEl.className = 'text-sm text-red-500 min-h-[1.25rem] mt-2';
@@ -504,6 +591,8 @@
       try {
         const res = await fetch('/api/models');
         const data = await res.json();
+        availableModels = data.models || [];
+        renderModelFileOptions();
         const container = document.getElementById('models-list');
         if (!data.models || data.models.length === 0) {
           container.innerHTML = '<p class="text-sm text-gray-400 italic">No models found in the models directory.</p>';
@@ -528,30 +617,33 @@
     }
 
     async function deleteModel(name) {
-      if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
+      if (!confirm(`Delete "${name}"? Any serving presets using this file will also be deleted.`)) return;
       const res = await fetch(`/api/models/${encodeURIComponent(name)}`, { method: 'DELETE' });
       const data = await res.json();
       if (data.success) {
-        loadModels();
+        await loadModels();
+        await loadModelPresets();
+        const status = document.getElementById('preset-status');
+        status.innerText = data.message;
+        status.className = 'text-sm text-green-600 mt-3';
       } else {
         alert(data.message);
       }
     }
 
-    // ── Dynamic params form ──────────────────────────────────────────────
+    // ── models.ini serving presets ───────────────────────────────────────
 
-    function renderParamRow(flag, value) {
-      const isBoolFlag = (value === '' || value === null || value === undefined);
+    function renderIniParamRow(containerId, key, value) {
       const row = document.createElement('div');
-      row.className = 'flex items-center gap-2';
+      row.className = 'ini-param-row flex items-center gap-2';
       row.innerHTML = `
-                <input type="text" placeholder="--flag" value="${escHtml(flag)}"
-                    class="flag-input w-48 rounded border border-gray-300 px-2 py-1 text-sm font-mono">
-                <input type="text" placeholder="value (leave empty for boolean flags)" value="${escHtml(isBoolFlag ? '' : value)}"
-                    class="value-input flex-1 rounded border border-gray-300 px-2 py-1 text-sm font-mono text-gray-600">
-                <button type="button" onclick="this.closest('div').remove()"
-                    class="text-gray-400 hover:text-red-500 text-lg leading-none px-1" title="Remove">×</button>`;
-      document.getElementById('params-list').appendChild(row);
+        <input type="text" placeholder="ctx-size" value="${escHtml(key || '')}"
+          class="key-input w-48 rounded border border-gray-300 px-2 py-1.5 text-sm font-mono">
+        <input type="text" placeholder="value" value="${escHtml(value ?? '')}"
+          class="value-input flex-1 rounded border border-gray-300 px-2 py-1.5 text-sm font-mono text-gray-600">
+        <button type="button" onclick="this.closest('.ini-param-row').remove()"
+          class="text-gray-400 hover:text-red-500 text-lg leading-none px-1" title="Remove">×</button>`;
+      document.getElementById(containerId).appendChild(row);
     }
 
     function escHtml(s) {
@@ -559,21 +651,257 @@
       return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
 
-    function addParamRow() {
-      renderParamRow('', '');
-      // Focus the new flag input
-      const rows = document.querySelectorAll('#params-list .flag-input');
+    function addIniParamRow(containerId, key = '', value = '') {
+      renderIniParamRow(containerId, key, value);
+      const rows = document.querySelectorAll(`#${containerId} .key-input`);
       rows[rows.length - 1].focus();
+    }
+
+    function collectIniParams(containerId) {
+      return Array.from(document.querySelectorAll(`#${containerId} .ini-param-row`))
+        .map(row => ({
+          key: row.querySelector('.key-input').value.trim().replace(/^-+/, ''),
+          value: row.querySelector('.value-input').value.trim()
+        }))
+        .filter(param => param.key);
+    }
+
+    function renderModelFileOptions() {
+      document.getElementById('model-file-options').innerHTML = availableModels
+        .map(model => `<option value="data/models/${escHtml(model.name)}"></option>`)
+        .join('');
+    }
+
+    function modelParam(preset) {
+      return (preset.params || []).find(param => param.key === 'model')?.value || '';
+    }
+
+    function renderModelPresets() {
+      const container = document.getElementById('presets-list');
+      const presets = presetConfig.presets || [];
+      if (!presets.length) {
+        container.innerHTML = '<div class="border border-dashed border-gray-300 rounded-lg p-5 text-center"><p class="text-sm text-gray-500">No serving presets configured.</p><p class="text-xs text-gray-400 mt-1">Downloaded files remain inactive until you add a preset.</p></div>';
+        return;
+      }
+      container.innerHTML = presets.map((preset, index) => {
+        const model = modelParam(preset);
+        const parameterCount = (preset.params || []).filter(param => param.key !== 'model').length;
+        const status = preset.model_exists
+          ? '<span class="text-xs font-medium text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5">Model found</span>'
+          : '<span class="text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">Model file missing</span>';
+        return `
+          <div class="flex items-center justify-between gap-4 p-3 border border-gray-200 rounded-lg hover:border-gray-300 transition-colors">
+            <div class="min-w-0">
+              <div class="flex items-center gap-2">
+                <h3 class="text-sm font-semibold text-gray-800 font-mono truncate">${escHtml(preset.name)}</h3>
+                ${status}
+              </div>
+              <p class="text-xs text-gray-500 font-mono truncate mt-1">${escHtml(model || 'No model path configured')}</p>
+              <p class="text-xs text-gray-400 mt-1">${parameterCount} preset parameter${parameterCount === 1 ? '' : 's'}</p>
+            </div>
+            <div class="flex items-center gap-2 shrink-0">
+              <button type="button" onclick="duplicatePreset(${index})"
+                class="text-xs px-3 py-1.5 rounded border border-gray-300 hover:bg-gray-100" title="Duplicate preset with running number suffix">Duplicate</button>
+              <button type="button" onclick="openPresetModal(${index})"
+                class="text-xs px-3 py-1.5 rounded border border-gray-300 hover:bg-gray-100">Edit</button>
+              <button type="button" onclick="deletePreset(${index})"
+                class="text-xs px-3 py-1.5 rounded border border-red-200 text-red-600 hover:bg-red-50">Delete</button>
+            </div>
+          </div>`;
+      }).join('');
+    }
+
+    async function loadModelPresets() {
+      try {
+        const res = await fetch('/api/model-presets');
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Could not load models.ini');
+        presetConfig = data;
+        renderModelPresets();
+      } catch (e) {
+        document.getElementById('presets-list').innerHTML = `<p class="text-sm text-red-500">${escHtml(e.message)}</p>`;
+      }
+    }
+
+    function openPresetModal(index = null, initialModel = '') {
+      editingPresetIndex = index;
+      const preset = index === null ? { name: '', params: [] } : presetConfig.presets[index];
+      document.getElementById('preset-modal-title').innerText = index === null ? 'Add Serving Preset' : 'Edit Serving Preset';
+      document.getElementById('preset-name').value = preset.name || suggestPresetName(initialModel);
+      document.getElementById('preset-model').value = modelParam(preset) || initialModel;
+      document.getElementById('preset-modal-status').innerText = '';
+      const list = document.getElementById('preset-params-list');
+      list.innerHTML = '';
+      (preset.params || []).filter(param => param.key !== 'model')
+        .forEach(param => renderIniParamRow('preset-params-list', param.key, param.value));
+      const modal = document.getElementById('preset-modal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+      document.getElementById('preset-name').focus();
+    }
+
+    function suggestPresetName(modelPath) {
+      return (modelPath || '').split('/').pop().replace(/\.gguf$/i, '');
+    }
+
+    function closePresetModal() {
+      const modal = document.getElementById('preset-modal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    function closeModalOnBackdrop(event, modalId) {
+      if (event.target !== document.getElementById(modalId)) return;
+      if (modalId === 'preset-modal') closePresetModal();
+      if (modalId === 'global-params-modal') closeGlobalParamsModal();
+    }
+
+    async function persistModelPresets(nextConfig, statusElement) {
+      statusElement.innerText = 'Saving and restarting…';
+      statusElement.className = 'text-sm text-gray-500 mt-3';
+      const res = await fetch('/api/model-presets', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          global_params: nextConfig.global_params || [],
+          presets: nextConfig.presets || []
+        })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        statusElement.innerText = data.message || 'Could not save models.ini.';
+        statusElement.className = 'text-sm text-red-500 mt-3';
+        return false;
+      }
+      presetConfig = nextConfig;
+      statusElement.innerText = data.message;
+      statusElement.className = 'text-sm text-green-600 mt-3';
+      const panelStatus = document.getElementById('preset-status');
+      panelStatus.innerText = data.message;
+      panelStatus.className = 'text-sm text-green-600 mt-3';
+      renderModelPresets();
+      return true;
+    }
+
+    async function savePreset() {
+      const name = document.getElementById('preset-name').value.trim();
+      const model = document.getElementById('preset-model').value.trim();
+      const status = document.getElementById('preset-modal-status');
+      if (!name || !model) {
+        status.innerText = 'Preset name and model file are required.';
+        status.className = 'text-sm text-red-500 min-h-[1.25rem]';
+        return;
+      }
+      const duplicate = presetConfig.presets.some((preset, index) =>
+        preset.name === name && index !== editingPresetIndex);
+      if (duplicate) {
+        status.innerText = `A preset named "${name}" already exists.`;
+        status.className = 'text-sm text-red-500 min-h-[1.25rem]';
+        return;
+      }
+      const nextConfig = JSON.parse(JSON.stringify(presetConfig));
+      const preset = { name, params: [{ key: 'model', value: model }, ...collectIniParams('preset-params-list')] };
+      if (editingPresetIndex === null) nextConfig.presets.push(preset);
+      else nextConfig.presets[editingPresetIndex] = preset;
+      if (await persistModelPresets(nextConfig, status)) {
+        await loadModelPresets();
+        closePresetModal();
+      }
+    }
+
+    async function deletePreset(index) {
+      const preset = presetConfig.presets[index];
+      if (!confirm(`Delete serving preset "${preset.name}"? The model file will be kept.`)) return;
+      const nextConfig = JSON.parse(JSON.stringify(presetConfig));
+      nextConfig.presets.splice(index, 1);
+      const status = document.getElementById('preset-status');
+      if (await persistModelPresets(nextConfig, status)) await loadModelPresets();
+    }
+
+    async function refreshPresets() {
+      const btn = document.getElementById('btn-refresh-presets');
+      const status = document.getElementById('preset-status');
+      if (btn) btn.disabled = true;
+      status.innerText = 'Refreshing presets…';
+      status.className = 'text-sm text-gray-500 mt-3';
+      try {
+        const res = await fetch('/api/model-presets/refresh', { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+          status.innerText = data.message;
+          status.className = 'text-sm text-green-600 mt-3';
+          await loadModelPresets();
+        } else {
+          status.innerText = data.message || 'Failed to refresh presets.';
+          status.className = 'text-sm text-red-500 mt-3';
+        }
+      } catch (e) {
+        status.innerText = 'Error refreshing presets: ' + e;
+        status.className = 'text-sm text-red-500 mt-3';
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    }
+
+    function generateDuplicatePresetName(sourceName) {
+      const existingNames = (presetConfig.presets || []).map(p => p.name);
+      let base = sourceName;
+      let counter = 1;
+      const match = sourceName.match(/^(.*)-(\d+)$/);
+      if (match) {
+        base = match[1];
+        counter = parseInt(match[2], 10) + 1;
+      }
+      let candidate = `${base}-${counter}`;
+      while (existingNames.includes(candidate) || candidate === '*') {
+        counter++;
+        candidate = `${base}-${counter}`;
+      }
+      return candidate;
+    }
+
+    async function duplicatePreset(index) {
+      const preset = presetConfig.presets[index];
+      const newName = generateDuplicatePresetName(preset.name);
+      const nextConfig = JSON.parse(JSON.stringify(presetConfig));
+      const duplicated = JSON.parse(JSON.stringify(preset));
+      duplicated.name = newName;
+      nextConfig.presets.push(duplicated);
+      const status = document.getElementById('preset-status');
+      if (await persistModelPresets(nextConfig, status)) await loadModelPresets();
+    }
+
+    function openGlobalParamsModal() {
+      const list = document.getElementById('global-params-list');
+      list.innerHTML = '';
+      (presetConfig.global_params || []).forEach(param =>
+        renderIniParamRow('global-params-list', param.key, param.value));
+      document.getElementById('global-modal-status').innerText = '';
+      const modal = document.getElementById('global-params-modal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function closeGlobalParamsModal() {
+      const modal = document.getElementById('global-params-modal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    async function saveGlobalParams() {
+      const nextConfig = JSON.parse(JSON.stringify(presetConfig));
+      nextConfig.global_params = collectIniParams('global-params-list');
+      const status = document.getElementById('global-modal-status');
+      if (await persistModelPresets(nextConfig, status)) {
+        await loadModelPresets();
+        closeGlobalParamsModal();
+      }
     }
 
     async function loadConfig() {
       try {
         const res = await fetch('/api/config');
         const data = await res.json();
-        const list = document.getElementById('params-list');
-        list.innerHTML = '';
-        (data.params || []).forEach(p => renderParamRow(p.flag || '', p.value ?? ''));
-        // Load cmake_params and render presets from config
         document.getElementById('cmake-params').value = data.cmake_params || '';
         renderCmakePresets(data.cmake_presets || []);
       } catch (e) {
@@ -581,44 +909,14 @@
       }
     }
 
-    async function saveConfig() {
-      const rows = document.querySelectorAll('#params-list > div');
-      const params = [];
-      rows.forEach(row => {
-        const flag = row.querySelector('.flag-input').value.trim();
-        const value = row.querySelector('.value-input').value.trim();
-        if (flag) params.push({ flag, value });
-      });
-
-      // Keep cmake_params in sync when saving llama-server params
-      const cmake_params = document.getElementById('cmake-params').value.trim();
-
-      document.getElementById('config-status').innerText = "Restarting...";
-      const res = await fetch('/api/config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ params, cmake_params })
-      });
-      const data = await res.json();
-      document.getElementById('config-status').innerText = data.message;
-    }
-
     async function saveCmakeParams() {
-      // Read current llama-server params so we don't lose them
-      const rows = document.querySelectorAll('#params-list > div');
-      const params = [];
-      rows.forEach(row => {
-        const flag = row.querySelector('.flag-input').value.trim();
-        const value = row.querySelector('.value-input').value.trim();
-        if (flag) params.push({ flag, value });
-      });
       const cmake_params = document.getElementById('cmake-params').value.trim();
 
       document.getElementById('cmake-status').innerText = "Saving…";
       const res = await fetch('/api/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ params, cmake_params })
+        body: JSON.stringify({ cmake_params })
       });
       const data = await res.json();
       // saveCmakeParams only saves; the build will pick up new flags on next Build click
@@ -740,9 +1038,11 @@
 
     loadConfig();
     loadModels();
+    loadModelPresets();
     setInterval(pollStatus, 3000);
     setInterval(pollLogs, 2000);
     setInterval(loadModels, 10000);
+    setInterval(loadModelPresets, 10000);
     pollStatus();
     pollLogs();
   </script>
