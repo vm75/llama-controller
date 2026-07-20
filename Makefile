@@ -1,5 +1,5 @@
 # Variables
-IMAGE_NAME = vm75/llama-web-ui
+IMAGE_NAME = vm75/llama-controller
 PORT_UI = 5000
 
 .PHONY: all build run test stop clean logs

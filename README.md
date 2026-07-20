@@ -1,9 +1,9 @@
-# Llama Web UI
+# Llama Controller
 
-[![GitHub Repository](https://img.shields.io/badge/GitHub-vm75%2Fllama--web--ui-181717?style=flat&logo=github)](https://github.com/vm75/llama-web-ui)
-[![Docker Image](https://img.shields.io/docker/v/vm75/llama-web-ui?label=Docker%20Hub)](https://hub.docker.com/r/vm75/llama-web-ui)
-[![Docker Pulls](https://img.shields.io/docker/pulls/vm75/llama-web-ui)](https://hub.docker.com/r/vm75/llama-web-ui)
-[![Build Status](https://img.shields.io/github/actions/workflow/status/vm75/llama-web-ui/docker-publish.yml?branch=main&label=build)](https://github.com/vm75/llama-web-ui/actions)
+[![GitHub Repository](https://img.shields.io/badge/GitHub-vm75%2Fllama--controller-181717?style=flat&logo=github)](https://github.com/vm75/llama-controller)
+[![Docker Image](https://img.shields.io/docker/v/vm75/llama-controller?label=Docker%20Hub)](https://hub.docker.com/r/vm75/llama-controller)
+[![Docker Pulls](https://img.shields.io/docker/pulls/vm75/llama-controller)](https://hub.docker.com/r/vm75/llama-controller)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/vm75/llama-controller/docker-publish.yml?branch=main&label=build)](https://github.com/vm75/llama-controller/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Podman Ready](https://img.shields.io/badge/Podman-Rootless%20Ready-892CA0?logo=podman&logoColor=white)](#)
 
@@ -45,7 +45,7 @@ cp .env.example .env
 
 | Variable | Default | Description |
 |---|---|---|
-| `LLAMA_WEB_UI_PORT` | `5000` | Port for the control plane web UI |
+| `LLAMA_CONTROLLER_PORT` | `5000` | Port for the control plane web UI |
 | `LLAMA_SERVER_PORT` | `8080` | Port for the llama-server inference API |
 | `LLAMA_CPP_REPO` | `https://github.com/ggml-org/llama.cpp.git` | Custom `llama.cpp` Git repository URL |
 | `LLAMA_CPP_BRANCH` | `master` | Target `llama.cpp` branch to clone/build |
@@ -66,11 +66,11 @@ Choose a build preset in the Web UI before building. A preset fills in both the 
 
 ```bash
 docker run -d \
-  --name llama-server \
+  --name llama-controller \
   -p 5000:5000 \
   -p 8080:8080 \
   -v ./data:/home/llama/app/data:Z \
-  vm75/llama-web-ui
+  vm75/llama-controller
 ```
 
 > **Podman users:** add `--userns=keep-id` to avoid permission issues with volume mounts.
@@ -132,7 +132,7 @@ python server/server.py
 ### Building the Image
 
 ```bash
-docker build -t llama-web-ui .
+docker build -t llama-controller .
 ```
 
 ## License

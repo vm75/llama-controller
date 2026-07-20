@@ -1,14 +1,14 @@
 services:
-  llama-web-ui:
-    image: vm75/llama-web-ui
-    container_name: llama-server
+  llama-controller:
+    image: vm75/llama-controller
+    container_name: llama-controller
     # Crucial flag that maps your host user ID to the llama user inside the container
     userns_mode: keep-id
     ports:
-      - "${LLAMA_WEB_UI_PORT:-5000}:5000"
+      - "${LLAMA_CONTROLLER_PORT:-5000}:5000"
       - "${LLAMA_SERVER_PORT:-8080}:8080"
     environment:
-      - LLAMA_WEB_UI_PORT=${LLAMA_WEB_UI_PORT:-5000}
+      - LLAMA_CONTROLLER_PORT=${LLAMA_CONTROLLER_PORT:-5000}
       - LLAMA_SERVER_PORT=${LLAMA_SERVER_PORT:-8080}
       - LLAMA_CPP_REPO=${LLAMA_CPP_REPO:-https://github.com/ggml-org/llama.cpp.git}
       - LLAMA_CPP_BRANCH=${LLAMA_CPP_BRANCH:-master}

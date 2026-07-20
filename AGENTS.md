@@ -1,4 +1,4 @@
-# Llama Web UI — Agent Reference
+# Llama Controller — Agent Reference
 
 A lightweight, containerized control plane for `llama.cpp`. Flask backend + vanilla HTML/JS/Tailwind frontend. Manages building `llama.cpp` from source, model files, native `models.ini` serving presets, and the `llama-server` process lifecycle.
 
@@ -19,7 +19,7 @@ A lightweight, containerized control plane for `llama.cpp`. Flask backend + vani
 ## Project Layout
 
 ```
-llama-web-ui/
+llama-controller/
 ├── server/                        # All backend + frontend code
 │   ├── server.py                  # Flask app — the entire backend
 │   ├── requirements.txt           # Python deps: Flask, Werkzeug
@@ -163,7 +163,7 @@ All routes are defined in `server/server.py`. All API responses are JSON.
 - **Workdir:** `/home/llama/app`
 - **Ports:** `5000` (Flask UI), `8080` (llama-server)
 - **Environment variables:**
-  - `LLAMA_WEB_UI_PORT`: Web UI port (default `5000`)
+  - `LLAMA_CONTROLLER_PORT`: Web UI port (default `5000`)
   - `LLAMA_SERVER_PORT`: llama-server port (default `8080`)
   - `LLAMA_CPP_REPO`: `llama.cpp` Git repository URL (default `https://github.com/ggml-org/llama.cpp.git`)
   - `LLAMA_CPP_BRANCH`: `llama.cpp` target branch (default `master`)

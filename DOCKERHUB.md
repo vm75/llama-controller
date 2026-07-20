@@ -1,15 +1,15 @@
-# llama-web-ui
+# llama-controller
 
-[![GitHub Repository](https://img.shields.io/badge/GitHub-vm75%2Fllama--web--ui-181717?style=flat&logo=github)](https://github.com/vm75/llama-web-ui)
-[![Docker Image](https://img.shields.io/docker/v/vm75/llama-web-ui?label=Docker%20Hub)](https://hub.docker.com/r/vm75/llama-web-ui)
-[![Docker Pulls](https://img.shields.io/docker/pulls/vm75/llama-web-ui)](https://hub.docker.com/r/vm75/llama-web-ui)
-[![Build Status](https://img.shields.io/github/actions/workflow/status/vm75/llama-web-ui/docker-publish.yml?branch=main&label=build)](https://github.com/vm75/llama-web-ui/actions)
+[![GitHub Repository](https://img.shields.io/badge/GitHub-vm75%2Fllama--controller-181717?style=flat&logo=github)](https://github.com/vm75/llama-controller)
+[![Docker Image](https://img.shields.io/docker/v/vm75/llama-controller?label=Docker%20Hub)](https://hub.docker.com/r/vm75/llama-controller)
+[![Docker Pulls](https://img.shields.io/docker/pulls/vm75/llama-controller)](https://hub.docker.com/r/vm75/llama-controller)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/vm75/llama-controller/docker-publish.yml?branch=main&label=build)](https://github.com/vm75/llama-controller/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Podman Ready](https://img.shields.io/badge/Podman-Rootless%20Ready-892CA0?logo=podman&logoColor=white)](#)
 
-> 📁 **Source Code & Issue Tracker:** [github.com/vm75/llama-web-ui](https://github.com/vm75/llama-web-ui)
+> 📁 **Source Code & Issue Tracker:** [github.com/vm75/llama-controller](https://github.com/vm75/llama-controller)
 
-A lightweight, containerized control plane for [`llama.cpp`](https://github.com/ggml-org/llama.cpp). `llama-web-ui` provides a clean single-page interface to compile `llama.cpp` from source, download and manage GGUF models, configure native `models.ini` serving presets, and control the `llama-server` inference process lifecycle.
+A lightweight, containerized control plane for [`llama.cpp`](https://github.com/ggml-org/llama.cpp). `llama-controller` provides a clean single-page interface to compile `llama.cpp` from source, download and manage GGUF models, configure native `models.ini` serving presets, and control the `llama-server` inference process lifecycle.
 
 ---
 
@@ -30,22 +30,22 @@ A lightweight, containerized control plane for [`llama.cpp`](https://github.com/
 
 ```bash
 docker run -d \
-  --name llama-web-ui \
+  --name llama-controller \
   -p 5000:5000 \
   -p 8080:8080 \
   -v ./data:/home/llama/app/data:Z \
-  vm75/llama-web-ui:latest
+  vm75/llama-controller:latest
 ```
 
 > **Note for Podman users:** Add `--userns=keep-id` to preserve local file ownership:
 > ```bash
 > podman run -d \
->   --name llama-web-ui \
+>   --name llama-controller \
 >   --userns=keep-id \
 >   -p 5000:5000 \
 >   -p 8080:8080 \
 >   -v ./data:/home/llama/app/data:Z \
->   vm75/llama-web-ui:latest
+>   vm75/llama-controller:latest
 > ```
 
 ### Option 2: Docker Compose / Podman Compose
@@ -56,14 +56,14 @@ Create a `docker-compose.yml` file:
 version: '3.8'
 
 services:
-  llama-server:
-    image: vm75/llama-web-ui:latest
-    container_name: llama-server
+  llama-controller:
+    image: vm75/llama-controller:latest
+    container_name: llama-controller
     ports:
-      - "${LLAMA_WEB_UI_PORT:-5000}:5000"
+      - "${LLAMA_CONTROLLER_PORT:-5000}:5000"
       - "${LLAMA_SERVER_PORT:-8080}:8080"
     environment:
-      - LLAMA_WEB_UI_PORT=${LLAMA_WEB_UI_PORT:-5000}
+      - LLAMA_CONTROLLER_PORT=${LLAMA_CONTROLLER_PORT:-5000}
       - LLAMA_SERVER_PORT=${LLAMA_SERVER_PORT:-8080}
       - LLAMA_CPP_REPO=${LLAMA_CPP_REPO:-https://github.com/ggml-org/llama.cpp.git}
       - LLAMA_CPP_BRANCH=${LLAMA_CPP_BRANCH:-master}
@@ -90,7 +90,7 @@ Once running, access:
 
 | Variable | Default | Description |
 |---|---|---|
-| `LLAMA_WEB_UI_PORT` | `5000` | Port for the control plane web UI |
+| `LLAMA_CONTROLLER_PORT` | `5000` | Port for the control plane web UI |
 | `LLAMA_SERVER_PORT` | `8080` | Port for the `llama-server` OpenAI-compatible API |
 | `LLAMA_CPP_REPO` | `https://github.com/ggml-org/llama.cpp.git` | `llama.cpp` Git repository URL |
 | `LLAMA_CPP_BRANCH` | `master` | Target `llama.cpp` branch to clone/build |

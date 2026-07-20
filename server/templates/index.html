@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>llama-server UI</title>
+  <title>Llama Controller</title>
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
@@ -12,7 +12,7 @@
 <body class="bg-gray-100 p-8 font-sans">
   <div class="max-w-4xl mx-auto space-y-6">
     <div class="flex items-center justify-between">
-      <h1 class="text-3xl font-bold text-gray-800">llama.cpp UI <span class="text-sm font-normal text-gray-500 ml-2">v{{ version }}</span></h1>
+      <h1 class="text-3xl font-bold text-gray-800">Llama Controller <span class="text-sm font-normal text-gray-500 ml-2">v{{ version }}</span></h1>
       <!-- Status pipeline: Binary → Running → Open Server -->
       <div class="flex items-center gap-2">
         <!-- Stage 1: Binary not built (hidden once built) -->
