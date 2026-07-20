@@ -30,7 +30,7 @@ llama-web-ui/
 ├── config.default.json            # Default config — seeded into data/config.json on first run
 ├── models.ini.example             # Default global model parameters — seeded into data/models.ini
 ├── Dockerfile                     # Debian bookworm-slim, non-root `llama` user, venv
-├── docker-compose.yml.sample      # Sample compose file (users copy to docker-compose.yml)
+├── docker-compose.yml.example     # Sample compose file (users copy to docker-compose.yml)
 ├── .env.example                   # Documented port variables
 ├── Makefile                       # Podman workflow shortcuts (build, run, test, stop, etc.)
 ├── VERSION                        # Semver string (e.g. "0.1.0"), read by server.py at startup
@@ -46,7 +46,7 @@ data/                              # Persistent volume mount point
 └── models/                        # GGUF model files
 llama.cpp/                         # Cloned at build time by server.py
 venv/                              # Python virtual environment (created by Dockerfile)
-docker-compose.yml                 # User's local compose (copied from .sample)
+docker-compose.yml                 # User's local compose (copied from .example)
 .env                               # User's local port overrides
 ```
 
@@ -76,7 +76,7 @@ docker-compose.yml                 # User's local compose (copied from .sample)
 
 **Serving flow:** `start_llama()` launches `llama-server --models-preset data/models.ini --host 0.0.0.0 --port 8080`. Uploads and downloads only open a prefilled preset modal; they do not restart the process. Deleting a model removes presets that reference it and restarts only when at least one preset was removed. Saving `models.ini` or refreshing presets through the UI also restarts it. Individual presets can be duplicated with an auto-generated unique running number suffix.
 
-**Build flow:** `POST /api/build` → `git clone` / `git fetch+reset` → `cmake -B build -DCMAKE_BUILD_TYPE=Release {cmake_params}` → `cmake --build build --target llama-server -j` → auto-start. Note: llama.cpp uses `master` branch, not `main`.
+**Build flow:** The UI build preset saves its CMake flags and required apt packages to `config.json`. `POST /api/build` installs that saved package list via `sudo apt-get`, clones from `LLAMA_CPP_REPO` (default `https://github.com/ggml-org/llama.cpp.git`, re-clones if origin changed), checks out `LLAMA_CPP_BRANCH` (default `master`), runs `cmake -B build -DCMAKE_BUILD_TYPE=Release {cmake_params}`, builds the `llama-server` target, and auto-starts it. Packages are configured only through the UI/config; there is no Docker environment override.
 
 ---
 
@@ -85,11 +85,13 @@ docker-compose.yml                 # User's local compose (copied from .sample)
 ```jsonc
 {
   "cmake_params": "-DGGML_NATIVE=ON ...",        // Extra CMake flags (appended after -DCMAKE_BUILD_TYPE=Release)
-  "cmake_presets": [               // UI dropdown presets for cmake_params
-    { "label": "CPU",          "flags": "-DGGML_NATIVE=ON -DGGML_LTO=ON -DBUILD_SHARED_LIBS=OFF" },
-    { "label": "NVIDIA CUDA",  "flags": "-DGGML_CUDA=ON -DBUILD_SHARED_LIBS=OFF" },
-    { "label": "AMD ROCm",     "flags": "-DGGML_HIPBLAS=ON -DBUILD_SHARED_LIBS=OFF" },
-    { "label": "Vulkan",       "flags": "-DGGML_VULKAN=ON -DBUILD_SHARED_LIBS=OFF" }
+  "extra_packages": "",                         // Additional apt packages to install before build (empty by default)
+  "cmake_presets": [               // UI dropdown presets for cmake_params and extra_packages
+    { "label": "CPU",          "flags": "-DGGML_NATIVE=ON ...", "extra_packages": "" },
+    { "label": "CPU-BLAS",     "flags": "-DGGML_BLAS=ON ...",   "extra_packages": "libopenblas-dev" },
+    { "label": "NVIDIA CUDA",  "flags": "-DGGML_CUDA=ON ...",   "extra_packages": "nvidia-cuda-toolkit" },
+    { "label": "AMD ROCm",     "flags": "-DGGML_HIPBLAS=ON ...", "extra_packages": "hipcc" },
+    { "label": "Vulkan",       "flags": "-DGGML_VULKAN=ON ...", "extra_packages": "libvulkan-dev" }
   ],
   "llama_server_url": "http://localhost:8080"    // Configurable link shown in UI when server is running
 }
@@ -156,10 +158,15 @@ All routes are defined in `server/server.py`. All API responses are JSON.
 
 ## Container Details
 
-- **Base image:** `debian:bookworm-slim`
-- **User:** `llama` (non-root, for rootless Podman `userns_mode: keep-id`)
+- **Base image:** `debian:bookworm-slim` with `contrib`, `non-free`, and `non-free-firmware` enabled for CUDA build packages
+- **User:** `llama` (non-root with passwordless `sudo` restricted to `apt-get` for build-preset packages, for rootless Podman `userns_mode: keep-id`)
 - **Workdir:** `/home/llama/app`
 - **Ports:** `5000` (Flask UI), `8080` (llama-server)
+- **Environment variables:**
+  - `LLAMA_WEB_UI_PORT`: Web UI port (default `5000`)
+  - `LLAMA_SERVER_PORT`: llama-server port (default `8080`)
+  - `LLAMA_CPP_REPO`: `llama.cpp` Git repository URL (default `https://github.com/ggml-org/llama.cpp.git`)
+  - `LLAMA_CPP_BRANCH`: `llama.cpp` target branch (default `master`)
 - **Volume mount:** `./data → /home/llama/app/data` (`:Z` for SELinux)
 - **Entrypoint:** `./venv/bin/python server/server.py`
 - **Log files:** `/tmp/llama.logs` (server), `/tmp/build.logs` (build) — ephemeral, not persisted

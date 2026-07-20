@@ -3,7 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Docker Image](https://img.shields.io/docker/v/vm75/llama-web-ui?label=Docker%20Hub)](https://hub.docker.com/r/vm75/llama-web-ui)
 
-A lightweight, minimal control plane for [`llama.cpp`](https://github.com/ggerganov/llama.cpp). It runs inside a rootless Podman/Docker container and uses a Python Flask backend paired with a vanilla HTML/JS/Tailwind frontend.
+A lightweight, minimal control plane for [`llama.cpp`](https://github.com/ggml-org/llama.cpp). It runs inside a rootless Podman/Docker container and uses a Python Flask backend paired with a vanilla HTML/JS/Tailwind frontend.
 
 It manages compiling `llama.cpp` from source, downloading model files, configuring model-serving presets, and controlling the process lifecycle of `llama-server` — all from a single-page web UI.
 
@@ -12,7 +12,7 @@ It manages compiling `llama.cpp` from source, downloading model files, configuri
 - **No Bloat:** Built with vanilla HTML/JS and Tailwind CSS via CDN. Backend is a single Python Flask file. No Node.js, Webpack, React, databases, or complex setup.
 - **Model Presets:** Add, edit, duplicate, and delete `llama-server` model presets from the UI. Refresh presets automatically adds missing GGUF files and cleans up stale presets. Preset and global parameters are stored in `data/models.ini`.
 - **Decoupled Model Storage:** Downloading, uploading, or deleting a GGUF file does not restart or change the models served by `llama-server`.
-- **Dynamic Configuration:** Configure `llama.cpp` CMake build parameters (CPU, CUDA, ROCm, Vulkan presets) and model parameters directly from the UI.
+- **Build Presets:** Select CPU, BLAS, CUDA, ROCm, or Vulkan in the UI to configure both CMake flags and required apt packages in one place.
 - **Process Management:** Start, stop, and monitor the `llama-server` lifecycle. Logs stream in real-time.
 - **Rootless Podman Support:** Designed from the ground up to be compatible with rootless Podman containers.
 
@@ -28,7 +28,7 @@ It manages compiling `llama.cpp` from source, downloading model files, configuri
 ### 1. Copy the sample compose file
 
 ```bash
-cp docker-compose.yml.sample docker-compose.yml
+cp docker-compose.yml.example docker-compose.yml
 ```
 
 ### 2. (Optional) Configure ports
@@ -43,6 +43,8 @@ cp .env.example .env
 |---|---|---|
 | `LLAMA_WEB_UI_PORT` | `5000` | Port for the control plane web UI |
 | `LLAMA_SERVER_PORT` | `8080` | Port for the llama-server inference API |
+| `LLAMA_CPP_REPO` | `https://github.com/ggml-org/llama.cpp.git` | Custom `llama.cpp` Git repository URL |
+| `LLAMA_CPP_BRANCH` | `master` | Target `llama.cpp` branch to clone/build |
 
 ### 3. Start the container
 
@@ -53,6 +55,8 @@ podman-compose up -d
 ```
 
 The Web UI will be available at `http://localhost:5000`. The llama-server inference API runs on `http://localhost:8080`.
+
+Choose a build preset in the Web UI before building. A preset fills in both the CMake flags and any apt packages needed by that backend; clicking **Build Latest** saves both values to `data/config.json` before starting the build. The fields remain editable for custom builds. There is no separate Docker package setting.
 
 ### Using Docker Run
 

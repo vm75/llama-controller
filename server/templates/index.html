@@ -258,33 +258,35 @@
       </div>
     </div>
 
-    <!-- CMake Build Parameters panel -->
+    <!-- Build settings panel -->
     <div class="bg-white p-6 rounded-lg shadow">
-      <h2 class="text-xl font-semibold mb-1">llama-server CMake Build Parameters <span
+      <h2 class="text-xl font-semibold mb-1">llama-server Build Settings <span
           class="text-sm font-normal text-gray-400">(Applied on next Build)</span></h2>
-      <p class="text-xs text-gray-400 mb-3">Hardcoded: <code
-          class="bg-gray-100 px-1 rounded">-DCMAKE_BUILD_TYPE=Release</code> &nbsp;— add extra flags below.</p>
+      <p class="text-xs text-gray-400 mb-3">Choose a preset to set its CMake flags and required packages together. <code
+          class="bg-gray-100 px-1 rounded">-DCMAKE_BUILD_TYPE=Release</code> is always enabled.</p>
 
       <!-- Preset templates (rendered dynamically from config) -->
       <div id="cmake-presets" class="flex flex-wrap gap-2 mb-3">
         <span class="text-xs text-gray-500 self-center mr-1">Presets:</span>
       </div>
 
-      <!-- Free-form textarea -->
-      <textarea id="cmake-params" rows="3" spellcheck="false"
+      <!-- Free-form textarea for CMake params -->
+      <label class="block text-xs font-semibold text-gray-700 mb-1">CMake Flags</label>
+      <textarea id="cmake-params" rows="2" spellcheck="false" oninput="syncCmakePresetHighlight()"
         placeholder="e.g. -DGGML_NATIVE=ON -DGGML_LTO=ON -DBUILD_SHARED_LIBS=OFF"
-        class="w-full rounded border border-gray-300 px-3 py-2 text-sm font-mono text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-300 resize-y"></textarea>
+        class="w-full rounded border border-gray-300 px-3 py-2 text-sm font-mono text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-300 resize-y mb-3"></textarea>
+
+      <label class="block text-xs font-semibold text-gray-700 mb-1">Preset Packages <span class="font-normal text-gray-400">(installed before the next build)</span></label>
+      <input id="extra-packages" type="text" spellcheck="false" oninput="syncCmakePresetHighlight()"
+        placeholder="Selected automatically by a preset; optional for custom builds"
+        class="w-full rounded border border-gray-300 px-3 py-1.5 text-sm font-mono text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-300">
 
       <div class="flex gap-3 mt-3">
-        <button type="button" onclick="saveCmakeParams()"
-          class="bg-blue-600 text-white text-sm px-4 py-1.5 rounded hover:bg-blue-700 transition-colors">Save CMake
-          Params</button>
         <button id="btn-build" type="button" onclick="buildLlama()"
-          class="bg-gray-800 text-white text-sm px-4 py-1.5 rounded hover:bg-gray-900 transition-colors">Build
+          class="bg-blue-600 text-white text-sm px-4 py-1.5 rounded hover:bg-blue-700 transition-colors">Build
           Latest</button>
         <span id="build-status" class="text-xs text-gray-500 italic self-center"></span>
       </div>
-      <p id="cmake-status" class="text-sm text-gray-600 mt-2"></p>
     </div>
 
     <!-- Tabbed log panel -->
@@ -382,13 +384,34 @@
       const btn = document.getElementById('btn-build');
       btn.disabled = true;
       btn.classList.add('opacity-50', 'cursor-not-allowed');
-      document.getElementById('build-status').innerText = "Building…";
-      switchTab('build');
-      const res = await fetch('/api/build', { method: 'POST' });
-      const data = await res.json();
-      document.getElementById('build-status').innerText = data.message;
-      btn.disabled = false;
-      btn.classList.remove('opacity-50', 'cursor-not-allowed');
+      const status = document.getElementById('build-status');
+      try {
+        status.innerText = "Saving settings…";
+        const configRes = await fetch('/api/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            cmake_params: document.getElementById('cmake-params').value.trim(),
+            extra_packages: document.getElementById('extra-packages').value.trim()
+          })
+        });
+        const configData = await configRes.json();
+        if (!configRes.ok || !configData.success) {
+          status.innerText = configData.message || 'Could not save build settings.';
+          return;
+        }
+
+        status.innerText = "Building…";
+        switchTab('build');
+        const res = await fetch('/api/build', { method: 'POST' });
+        const data = await res.json();
+        status.innerText = data.message;
+      } catch (e) {
+        status.innerText = 'Build request failed: ' + e;
+      } finally {
+        btn.disabled = false;
+        btn.classList.remove('opacity-50', 'cursor-not-allowed');
+      }
     }
 
     async function uploadFile() {
@@ -903,26 +926,11 @@
         const res = await fetch('/api/config');
         const data = await res.json();
         document.getElementById('cmake-params').value = data.cmake_params || '';
+        document.getElementById('extra-packages').value = data.extra_packages || '';
         renderCmakePresets(data.cmake_presets || []);
       } catch (e) {
         console.error('Failed to load config', e);
       }
-    }
-
-    async function saveCmakeParams() {
-      const cmake_params = document.getElementById('cmake-params').value.trim();
-
-      document.getElementById('cmake-status').innerText = "Saving…";
-      const res = await fetch('/api/config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cmake_params })
-      });
-      const data = await res.json();
-      // saveCmakeParams only saves; the build will pick up new flags on next Build click
-      document.getElementById('cmake-status').innerText = data.success
-        ? 'Saved. Click “Build Latest” to apply.'
-        : data.message;
     }
 
     function renderCmakePresets(presets) {
@@ -934,15 +942,28 @@
         btn.type = 'button';
         btn.className = 'cmake-preset-btn text-xs px-3 py-1 rounded border border-gray-300 bg-gray-50 hover:bg-blue-50 hover:border-blue-400 hover:text-blue-700 transition-colors font-mono';
         btn.textContent = preset.label;
+        btn.dataset.flags = preset.flags || '';
+        btn.dataset.packages = preset.extra_packages || '';
         btn.addEventListener('click', () => {
-          document.getElementById('cmake-params').value = preset.flags;
-          // Highlight active
-          container.querySelectorAll('.cmake-preset-btn').forEach(b => {
-            b.classList.remove('ring-2', 'ring-blue-400', 'bg-blue-50', 'border-blue-400', 'text-blue-700');
-          });
-          btn.classList.add('ring-2', 'ring-blue-400', 'bg-blue-50', 'border-blue-400', 'text-blue-700');
+          document.getElementById('cmake-params').value = btn.dataset.flags;
+          document.getElementById('extra-packages').value = btn.dataset.packages;
+          syncCmakePresetHighlight();
         });
         container.appendChild(btn);
+      });
+      syncCmakePresetHighlight();
+    }
+
+    function syncCmakePresetHighlight() {
+      const flags = document.getElementById('cmake-params').value.trim();
+      const packages = document.getElementById('extra-packages').value.trim();
+      document.querySelectorAll('.cmake-preset-btn').forEach(btn => {
+        const active = btn.dataset.flags.trim() === flags && btn.dataset.packages.trim() === packages;
+        btn.classList.toggle('ring-2', active);
+        btn.classList.toggle('ring-blue-400', active);
+        btn.classList.toggle('bg-blue-50', active);
+        btn.classList.toggle('border-blue-400', active);
+        btn.classList.toggle('text-blue-700', active);
       });
     }
 

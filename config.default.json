@@ -1,25 +1,36 @@
 {
   "cmake_params": "-DGGML_NATIVE=ON -DGGML_LTO=ON -DBUILD_SHARED_LIBS=OFF",
+  "extra_packages": "",
   "cmake_presets": [
     {
       "label": "CPU",
-      "flags": "-DGGML_NATIVE=ON -DGGML_LTO=ON -DBUILD_SHARED_LIBS=OFF"
+      "flags": "-DGGML_NATIVE=ON -DGGML_LTO=ON -DBUILD_SHARED_LIBS=OFF",
+      "extra_packages": ""
+    },
+    {
+      "label": "CPU-BLAS",
+      "flags": "-DGGML_NATIVE=ON -DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS -DBUILD_SHARED_LIBS=OFF",
+      "extra_packages": "libopenblas-dev"
     },
     {
       "label": "NVIDIA CUDA",
-      "flags": "-DGGML_CUDA=ON -DBUILD_SHARED_LIBS=OFF"
+      "flags": "-DGGML_CUDA=ON -DBUILD_SHARED_LIBS=OFF",
+      "extra_packages": "nvidia-cuda-toolkit"
     },
     {
       "label": "AMD ROCm",
-      "flags": "-DGGML_HIPBLAS=ON -DBUILD_SHARED_LIBS=OFF"
+      "flags": "-DGGML_HIPBLAS=ON -DBUILD_SHARED_LIBS=OFF",
+      "extra_packages": "hipcc"
     },
     {
       "label": "Vulkan",
-      "flags": "-DGGML_VULKAN=ON -DBUILD_SHARED_LIBS=OFF"
+      "flags": "-DGGML_VULKAN=ON -DBUILD_SHARED_LIBS=OFF",
+      "extra_packages": "libvulkan-dev"
     },
     {
       "label": "None",
-      "flags": ""
+      "flags": "",
+      "extra_packages": ""
     }
   ],
   "llama_server_url": "http://localhost:8080"

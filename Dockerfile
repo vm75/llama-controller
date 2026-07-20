@@ -1,5 +1,8 @@
 FROM debian:bookworm-slim
 
+# CUDA packages are shipped in Debian's non-free component.
+RUN sed -i 's/Components: main/Components: main contrib non-free non-free-firmware/' /etc/apt/sources.list.d/debian.sources
+
 # Install dependencies
 RUN apt-get update && apt-get install -y \
   build-essential \
@@ -9,10 +12,13 @@ RUN apt-get update && apt-get install -y \
   python3-pip \
   python3-venv \
   procps \
+  sudo \
   && rm -rf /var/lib/apt/lists/*
 
-# Create a non-root user for rootless podman compatibility
-RUN useradd -m -s /bin/bash llama
+# Create a non-root user for rootless podman compatibility. Runtime package
+# installation is limited to apt-get, which build presets invoke as needed.
+RUN useradd -m -s /bin/bash llama && \
+  echo "llama ALL=(root) NOPASSWD: /usr/bin/apt-get" > /etc/sudoers.d/llama
 USER llama
 WORKDIR /home/llama/app
 

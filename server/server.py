@@ -2,6 +2,7 @@ import os
 import sys
 import json
 import re
+import shlex
 import signal
 import subprocess
 import urllib.request
@@ -242,6 +243,8 @@ def update_config():
   existing = load_config()
   if 'cmake_params' not in data:
     data['cmake_params'] = existing.get('cmake_params', '')
+  if 'extra_packages' not in data:
+    data['extra_packages'] = existing.get('extra_packages', '')
   if 'cmake_presets' not in data:
     data['cmake_presets'] = existing.get('cmake_presets', [])
   if 'llama_server_url' not in data:
@@ -366,48 +369,82 @@ def get_status():
   server_running = llama_process is not None and llama_process.poll() is None
   return jsonify({"binary_built": binary_built, "server_running": server_running})
 
+def _normalize_git_url(url):
+  if not url:
+    return ''
+  url = url.strip()
+  if url.endswith('.git'):
+    url = url[:-4]
+  return url.rstrip('/')
+
+def install_build_packages(log_file=None):
+  config = load_config() if os.path.exists(CONFIG_FILE) else {}
+  extra_packages = str(config.get('extra_packages') or '').strip()
+  packages = shlex.split(extra_packages)
+  if not packages:
+    return
+  output = log_file or subprocess.DEVNULL
+  if log_file:
+    log_file.write(f"Installing preset packages: {' '.join(packages)}\n")
+    log_file.flush()
+  subprocess.run(
+    ["sudo", "apt-get", "update"],
+    stdout=output, stderr=subprocess.STDOUT, check=True
+  )
+  subprocess.run(
+    ["sudo", "apt-get", "install", "-y", "--no-install-recommends", "--", *packages],
+    stdout=output, stderr=subprocess.STDOUT, check=True
+  )
+
 @app.route('/api/build', methods=['POST'])
 def build_llama():
   try:
-    # If the directory exists but is not a valid git repo (e.g. corrupted clone),
-    # wipe it so we can do a clean clone below.
-    if os.path.exists(LLAMA_REPO) and not os.path.isdir(os.path.join(LLAMA_REPO, '.git')):
-      import shutil
-      shutil.rmtree(LLAMA_REPO)
+    repo_url = (os.environ.get('LLAMA_CPP_REPO') or 'https://github.com/ggml-org/llama.cpp.git').strip()
+    branch = (os.environ.get('LLAMA_CPP_BRANCH') or 'master').strip()
 
-    build_log = open(BUILD_LOG_FILE, 'w')
+    import shutil
+    # If the directory exists but is not a valid git repo or points to a different origin,
+    # wipe it so we can re-clone cleanly.
+    if os.path.exists(LLAMA_REPO):
+      if not os.path.isdir(os.path.join(LLAMA_REPO, '.git')):
+        shutil.rmtree(LLAMA_REPO)
+      else:
+        origin_proc = subprocess.run(
+          ["git", "remote", "get-url", "origin"],
+          cwd=LLAMA_REPO, capture_output=True, text=True
+        )
+        current_origin = origin_proc.stdout.strip()
+        if _normalize_git_url(current_origin) != _normalize_git_url(repo_url):
+          shutil.rmtree(LLAMA_REPO)
 
-    if not os.path.exists(LLAMA_REPO):
-      result = subprocess.run(
-        ["git", "clone", "https://github.com/ggerganov/llama.cpp.git"],
-        stdout=build_log, stderr=subprocess.STDOUT
-      )
-      build_log.flush()
-      if result.returncode != 0:
-        build_log.close()
-        raise subprocess.CalledProcessError(result.returncode, 'git clone')
+    with open(BUILD_LOG_FILE, 'w') as build_log:
+      install_build_packages(build_log)
 
-    # Fetch latest master, hard-reset, then build only the llama-server target.
-    # NOTE: ggerganov/llama.cpp uses 'master' as its default branch, not 'main'.
-    config = load_config()
-    extra_cmake = config.get('cmake_params', '').strip()
-    cmake_flags = "-DCMAKE_BUILD_TYPE=Release"
-    if extra_cmake:
-      cmake_flags += " " + extra_cmake
-    build_cmd = (
-      f"cd {LLAMA_REPO} && "
-      "git fetch origin master && "
-      "git reset --hard origin/master && "
-      f"cmake -B build {cmake_flags} && "
-      "cmake --build build --target llama-server -j"
-    )
-    result = subprocess.run(
-      build_cmd, shell=True, executable='/bin/bash',
-      stdout=build_log, stderr=subprocess.STDOUT
-    )
-    build_log.close()
-    if result.returncode != 0:
-      raise subprocess.CalledProcessError(result.returncode, build_cmd)
+      if not os.path.exists(LLAMA_REPO):
+        result = subprocess.run(
+          ["git", "clone", repo_url, "llama.cpp"],
+          stdout=build_log, stderr=subprocess.STDOUT, cwd=APP_ROOT
+        )
+        if result.returncode != 0:
+          raise subprocess.CalledProcessError(result.returncode, 'git clone')
+
+      # Fetch the target branch and build only the llama-server target.
+      config = load_config()
+      extra_cmake = shlex.split(str(config.get('cmake_params') or ''))
+      build_commands = [
+        ["git", "fetch", "origin", branch],
+        ["git", "checkout", "-B", branch, f"origin/{branch}"],
+        ["git", "reset", "--hard", f"origin/{branch}"],
+        ["cmake", "-B", "build", "-DCMAKE_BUILD_TYPE=Release", *extra_cmake],
+        ["cmake", "--build", "build", "--target", "llama-server", "-j"],
+      ]
+      for build_cmd in build_commands:
+        result = subprocess.run(
+          build_cmd, cwd=LLAMA_REPO,
+          stdout=build_log, stderr=subprocess.STDOUT
+        )
+        if result.returncode != 0:
+          raise subprocess.CalledProcessError(result.returncode, build_cmd)
 
     # Auto-start after successful build
     start_llama()
@@ -415,6 +452,8 @@ def build_llama():
   except subprocess.CalledProcessError as e:
     msg = f"Build failed (exit {e.returncode}). See Build Logs tab for details."
     return jsonify({"success": False, "message": msg})
+  except ValueError as e:
+    return jsonify({"success": False, "message": f"Invalid build settings: {e}"}), 400
 
 @app.route('/api/models')
 def list_models():
