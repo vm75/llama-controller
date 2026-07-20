@@ -1,0 +1,80 @@
+{
+  "params": [
+    {
+      "flag": "--threads",
+      "value": "4"
+    },
+    {
+      "flag": "--threads-batch",
+      "value": "4"
+    },
+    {
+      "flag": "--parallel",
+      "value": "1"
+    },
+    {
+      "flag": "--batch-size",
+      "value": "512"
+    },
+    {
+      "flag": "--ubatch-size",
+      "value": "64"
+    },
+    {
+      "flag": "--ctx-size",
+      "value": "8192"
+    },
+    {
+      "flag": "--temp",
+      "value": "1.0"
+    },
+    {
+      "flag": "--top-p",
+      "value": "0.95"
+    },
+    {
+      "flag": "--top-k",
+      "value": "64"
+    },
+    {
+      "flag": "--chat-template-kwargs",
+      "value": "{\"enable_thinking\":false}"
+    },
+    {
+      "flag": "--mlock",
+      "value": ""
+    },
+    {
+      "flag": "--no-mmap",
+      "value": ""
+    },
+    {
+      "flag": "--jinja",
+      "value": ""
+    }
+  ],
+  "cmake_params": "-DGGML_NATIVE=ON -DGGML_LTO=ON -DBUILD_SHARED_LIBS=OFF",
+  "cmake_presets": [
+    {
+      "label": "CPU",
+      "flags": "-DGGML_NATIVE=ON -DGGML_LTO=ON -DBUILD_SHARED_LIBS=OFF"
+    },
+    {
+      "label": "NVIDIA CUDA",
+      "flags": "-DGGML_CUDA=ON -DBUILD_SHARED_LIBS=OFF"
+    },
+    {
+      "label": "AMD ROCm",
+      "flags": "-DGGML_HIPBLAS=ON -DBUILD_SHARED_LIBS=OFF"
+    },
+    {
+      "label": "Vulkan",
+      "flags": "-DGGML_VULKAN=ON -DBUILD_SHARED_LIBS=OFF"
+    },
+    {
+      "label": "None",
+      "flags": ""
+    }
+  ],
+  "llama_server_url": "http://localhost:8080"
+}

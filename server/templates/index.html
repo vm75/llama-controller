@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>llama-server UI</title>
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="bg-gray-100 p-8 font-sans">
+  <div class="max-w-4xl mx-auto space-y-6">
+    <div class="flex items-center justify-between">
+      <h1 class="text-3xl font-bold text-gray-800">llama.cpp UI <span class="text-sm font-normal text-gray-500 ml-2">v{{ version }}</span></h1>
+      <!-- Status pipeline: Binary → Running → Open Server -->
+      <div class="flex items-center gap-2">
+        <!-- Stage 1: Binary not built (hidden once built) -->
+        <div id="stage-binary"
+          class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200/80 shadow-sm">
+          <span class="relative flex h-2 w-2">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+          </span>
+          Not Built
+        </div>
+
+        <!-- Stage 2: Server run status (visible when binary exists) -->
+        <div id="stage-status"
+          class="hidden items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold border shadow-sm">
+          <span id="status-dot" class="relative flex h-2 w-2">
+            <span class="relative inline-flex rounded-full h-2 w-2 bg-gray-400"></span>
+          </span>
+          <span id="status-label">Stopped</span>
+        </div>
+
+        <!-- Stage 3: Open server link (visible when running) -->
+        <a id="server-link" href="{{ llama_server_url }}" target="_blank" rel="noopener"
+          class="hidden items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/80 shadow-sm hover:bg-emerald-100 hover:shadow-md hover:shadow-emerald-200/50 transition-all duration-200 group">
+          <img src="/llama-icon.svg" alt="llama" class="w-4 h-4">
+          Open Server
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3 opacity-50 transition-transform duration-200 group-hover:translate-x-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M7 17l9.2-9.2M17 17V7H7"/>
+          </svg>
+        </a>
+
+        <!-- Edit URL button (visible alongside server link) -->
+        <button id="btn-edit-url" onclick="toggleUrlEditor()" title="Configure server URL"
+          class="hidden items-center justify-center w-6 h-6 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-200/80 transition-all duration-200">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+          </svg>
+        </button>
+
+        <!-- URL editor (inline, hidden by default) -->
+        <div id="url-editor" class="hidden items-center gap-1.5">
+          <input id="url-input" type="text" value="{{ llama_server_url }}"
+            class="text-xs border border-gray-300 rounded-lg px-2.5 py-1.5 w-56 focus:outline-none focus:ring-2 focus:ring-emerald-300 focus:border-emerald-400 transition-all"
+            placeholder="http://localhost:8080">
+          <button onclick="saveServerUrl()"
+            class="text-xs bg-emerald-600 text-white px-3 py-1.5 rounded-lg hover:bg-emerald-700 transition-colors shadow-sm">Save</button>
+          <button onclick="toggleUrlEditor()"
+            class="text-gray-400 hover:text-red-500 text-base leading-none transition-colors">×</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-white p-6 rounded-lg shadow">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-xl font-semibold">Models</h2>
+        <button id="btn-show-upload" onclick="toggleUploadForm()"
+          class="bg-green-600 text-white text-sm px-3 py-1.5 rounded hover:bg-green-700 transition-colors">⬆ Upload New
+          Model</button>
+      </div>
+
+      <!-- Upload form (hidden by default) -->
+      <div id="upload-form" class="hidden mb-4 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+        <div class="flex items-center gap-3">
+          <input type="file" id="model-file" class="flex-1 border border-gray-300 p-1.5 rounded text-sm">
+          <button onclick="uploadFile()"
+            class="bg-green-600 text-white px-4 py-1.5 rounded hover:bg-green-700 text-sm whitespace-nowrap">Upload</button>
+          <button onclick="toggleUploadForm()" class="text-gray-400 hover:text-red-500 text-lg leading-none px-1"
+            title="Cancel">×</button>
+        </div>
+        <p id="upload-status" class="text-sm text-gray-600 mt-2"></p>
+        <p class="text-xs text-red-500 mt-1">* For models &gt;2 GB, direct Podman volume mounting is recommended over
+          web upload.</p>
+      </div>
+
+      <!-- Model list -->
+      <div id="models-list">
+        <p class="text-sm text-gray-400 italic">Loading models…</p>
+      </div>
+    </div>
+
+    <div class="bg-white p-6 rounded-lg shadow">
+      <div class="flex items-center justify-between mb-1">
+        <h2 class="text-xl font-semibold">llama-server Parameters <span
+            class="text-sm font-normal text-gray-400">(Auto-restarts on Save)</span></h2>
+        <button onclick="openHelp()" title="llama-server --help"
+          class="flex-shrink-0 w-6 h-6 rounded-full bg-gray-200 hover:bg-gray-300 text-gray-500 text-xs font-bold leading-none flex items-center justify-center transition-colors">?</button>
+      </div>
+      <p class="text-xs text-gray-400 mb-4">Excluded from form (hardcoded): <code>--models-dir</code>,
+        <code>--host</code>, <code>--port</code>
+      </p>
+
+      <div id="params-list" class="space-y-2"></div>
+
+      <div class="flex gap-3 mt-4">
+        <button type="button" onclick="addParamRow()"
+          class="bg-gray-100 text-gray-700 text-sm px-3 py-1.5 rounded border border-gray-300 hover:bg-gray-200 transition-colors">＋
+          Add Parameter</button>
+        <button type="button" onclick="saveConfig()"
+          class="bg-purple-600 text-white text-sm px-4 py-1.5 rounded hover:bg-purple-700 transition-colors">Save &amp;
+          Restart</button>
+      </div>
+      <p id="config-status" class="text-sm text-gray-600 mt-2"></p>
+    </div>
+
+    <!-- CMake Build Parameters panel -->
+    <div class="bg-white p-6 rounded-lg shadow">
+      <h2 class="text-xl font-semibold mb-1">llama-server CMake Build Parameters <span
+          class="text-sm font-normal text-gray-400">(Applied on next Build)</span></h2>
+      <p class="text-xs text-gray-400 mb-3">Hardcoded: <code
+          class="bg-gray-100 px-1 rounded">-DCMAKE_BUILD_TYPE=Release</code> &nbsp;— add extra flags below.</p>
+
+      <!-- Preset templates (rendered dynamically from config) -->
+      <div id="cmake-presets" class="flex flex-wrap gap-2 mb-3">
+        <span class="text-xs text-gray-500 self-center mr-1">Presets:</span>
+      </div>
+
+      <!-- Free-form textarea -->
+      <textarea id="cmake-params" rows="3" spellcheck="false"
+        placeholder="e.g. -DGGML_NATIVE=ON -DGGML_LTO=ON -DBUILD_SHARED_LIBS=OFF"
+        class="w-full rounded border border-gray-300 px-3 py-2 text-sm font-mono text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-300 resize-y"></textarea>
+
+      <div class="flex gap-3 mt-3">
+        <button type="button" onclick="saveCmakeParams()"
+          class="bg-blue-600 text-white text-sm px-4 py-1.5 rounded hover:bg-blue-700 transition-colors">Save CMake
+          Params</button>
+        <button id="btn-build" type="button" onclick="buildLlama()"
+          class="bg-gray-800 text-white text-sm px-4 py-1.5 rounded hover:bg-gray-900 transition-colors">Build
+          Latest</button>
+        <span id="build-status" class="text-xs text-gray-500 italic self-center"></span>
+      </div>
+      <p id="cmake-status" class="text-sm text-gray-600 mt-2"></p>
+    </div>
+
+    <!-- Tabbed log panel -->
+    <div class="bg-gray-900 p-6 rounded-lg shadow">
+      <div class="flex items-center gap-2 mb-4">
+        <button id="tab-server" onclick="switchTab('server')"
+          class="text-sm font-semibold px-3 py-1 rounded bg-gray-700 text-white">Server Logs</button>
+        <button id="tab-build" onclick="switchTab('build')"
+          class="text-sm font-semibold px-3 py-1 rounded text-gray-400 hover:text-white">Build Logs</button>
+      </div>
+      <pre id="logs-server" class="text-green-400 text-sm overflow-y-auto h-64 font-mono"></pre>
+      <pre id="logs-build" class="text-yellow-300 text-sm overflow-y-auto h-64 font-mono hidden"></pre>
+    </div>
+  </div>
+
+  <!-- llama-server --help modal -->
+  <div id="help-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4"
+    onclick="closeHelpOnBackdrop(event)">
+    <!-- Backdrop -->
+    <div class="absolute inset-0 bg-black/60 backdrop-blur-sm"></div>
+    <!-- Panel -->
+    <div class="relative bg-gray-900 rounded-xl shadow-2xl w-full max-w-4xl max-h-[85vh] flex flex-col">
+      <div class="flex items-center justify-between px-5 py-3 border-b border-gray-700">
+        <span class="text-sm font-semibold text-gray-200 font-mono">llama-server --help</span>
+        <button onclick="closeHelp()" class="text-gray-400 hover:text-white text-xl leading-none">×</button>
+      </div>
+      <pre id="help-content"
+        class="flex-1 overflow-y-auto text-green-300 text-xs font-mono p-5 whitespace-pre-wrap">Loading…</pre>
+    </div>
+  </div>
+
+  <script>
+    let activeTab = 'server';
+    let helpLoaded = false;
+
+    // ── Help modal ───────────────────────────────────────────────────────────
+    async function openHelp() {
+      const modal = document.getElementById('help-modal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+      if (!helpLoaded) {
+        document.getElementById('help-content').textContent = 'Loading…';
+        try {
+          const res = await fetch('/api/llama-help');
+          const data = await res.json();
+          document.getElementById('help-content').textContent = data.help;
+          helpLoaded = true;
+        } catch (e) {
+          document.getElementById('help-content').textContent = 'Failed to load help: ' + e;
+        }
+      }
+    }
+
+    function closeHelp() {
+      const modal = document.getElementById('help-modal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    function closeHelpOnBackdrop(event) {
+      // Close only when clicking the backdrop itself, not the inner panel
+      if (event.target === document.getElementById('help-modal')) closeHelp();
+    }
+
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeHelp(); });
+
+    function switchTab(tab) {
+      activeTab = tab;
+      ['server', 'build'].forEach(t => {
+        const btn = document.getElementById('tab-' + t);
+        const log = document.getElementById('logs-' + t);
+        if (t === tab) {
+          btn.classList.add('bg-gray-700', 'text-white');
+          btn.classList.remove('text-gray-400');
+          log.classList.remove('hidden');
+        } else {
+          btn.classList.remove('bg-gray-700', 'text-white');
+          btn.classList.add('text-gray-400');
+          log.classList.add('hidden');
+        }
+      });
+    }
+
+    async function buildLlama() {
+      const btn = document.getElementById('btn-build');
+      btn.disabled = true;
+      btn.classList.add('opacity-50', 'cursor-not-allowed');
+      document.getElementById('build-status').innerText = "Building…";
+      switchTab('build');
+      const res = await fetch('/api/build', { method: 'POST' });
+      const data = await res.json();
+      document.getElementById('build-status').innerText = data.message;
+      btn.disabled = false;
+      btn.classList.remove('opacity-50', 'cursor-not-allowed');
+    }
+
+    async function uploadFile() {
+      const fileInput = document.getElementById('model-file');
+      if (!fileInput.files[0]) return;
+
+      const formData = new FormData();
+      formData.append('file', fileInput.files[0]);
+
+      document.getElementById('upload-status').innerText = "Uploading…";
+      const res = await fetch('/api/upload', { method: 'POST', body: formData });
+      const data = await res.json();
+      document.getElementById('upload-status').innerText = data.message;
+      if (data.success) {
+        fileInput.value = '';
+        setTimeout(() => {
+          toggleUploadForm();
+          document.getElementById('upload-status').innerText = '';
+        }, 2000);
+        loadModels();
+      }
+    }
+
+    function toggleUploadForm() {
+      const form = document.getElementById('upload-form');
+      form.classList.toggle('hidden');
+    }
+
+    function formatSize(bytes) {
+      if (bytes >= 1073741824) return (bytes / 1073741824).toFixed(2) + ' GB';
+      if (bytes >= 1048576) return (bytes / 1048576).toFixed(1) + ' MB';
+      return (bytes / 1024).toFixed(0) + ' KB';
+    }
+
+    async function loadModels() {
+      try {
+        const res = await fetch('/api/models');
+        const data = await res.json();
+        const container = document.getElementById('models-list');
+        if (!data.models || data.models.length === 0) {
+          container.innerHTML = '<p class="text-sm text-gray-400 italic">No models found in the models directory.</p>';
+          return;
+        }
+        container.innerHTML = data.models.map(m => `
+          <div class="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
+            <span class="text-sm font-mono text-gray-800">${escHtml(m.name)}</span>
+            <div class="flex items-center gap-3">
+              <span class="text-xs text-gray-400">${formatSize(m.size)}</span>
+              <button onclick="deleteModel('${escHtml(m.name)}')"
+                class="text-gray-300 hover:text-red-500 transition-colors" title="Delete model">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
+                </svg>
+              </button>
+            </div>
+          </div>`).join('');
+      } catch (e) {
+        document.getElementById('models-list').innerHTML = '<p class="text-sm text-red-400">Failed to load models.</p>';
+      }
+    }
+
+    async function deleteModel(name) {
+      if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
+      const res = await fetch(`/api/models/${encodeURIComponent(name)}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        loadModels();
+      } else {
+        alert(data.message);
+      }
+    }
+
+    // ── Dynamic params form ──────────────────────────────────────────────
+
+    function renderParamRow(flag, value) {
+      const isBoolFlag = (value === '' || value === null || value === undefined);
+      const row = document.createElement('div');
+      row.className = 'flex items-center gap-2';
+      row.innerHTML = `
+                <input type="text" placeholder="--flag" value="${escHtml(flag)}"
+                    class="flag-input w-48 rounded border border-gray-300 px-2 py-1 text-sm font-mono">
+                <input type="text" placeholder="value (leave empty for boolean flags)" value="${escHtml(isBoolFlag ? '' : value)}"
+                    class="value-input flex-1 rounded border border-gray-300 px-2 py-1 text-sm font-mono text-gray-600">
+                <button type="button" onclick="this.closest('div').remove()"
+                    class="text-gray-400 hover:text-red-500 text-lg leading-none px-1" title="Remove">×</button>`;
+      document.getElementById('params-list').appendChild(row);
+    }
+
+    function escHtml(s) {
+      if (s == null) return '';
+      return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function addParamRow() {
+      renderParamRow('', '');
+      // Focus the new flag input
+      const rows = document.querySelectorAll('#params-list .flag-input');
+      rows[rows.length - 1].focus();
+    }
+
+    async function loadConfig() {
+      try {
+        const res = await fetch('/api/config');
+        const data = await res.json();
+        const list = document.getElementById('params-list');
+        list.innerHTML = '';
+        (data.params || []).forEach(p => renderParamRow(p.flag || '', p.value ?? ''));
+        // Load cmake_params and render presets from config
+        document.getElementById('cmake-params').value = data.cmake_params || '';
+        renderCmakePresets(data.cmake_presets || []);
+      } catch (e) {
+        console.error('Failed to load config', e);
+      }
+    }
+
+    async function saveConfig() {
+      const rows = document.querySelectorAll('#params-list > div');
+      const params = [];
+      rows.forEach(row => {
+        const flag = row.querySelector('.flag-input').value.trim();
+        const value = row.querySelector('.value-input').value.trim();
+        if (flag) params.push({ flag, value });
+      });
+
+      // Keep cmake_params in sync when saving llama-server params
+      const cmake_params = document.getElementById('cmake-params').value.trim();
+
+      document.getElementById('config-status').innerText = "Restarting...";
+      const res = await fetch('/api/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ params, cmake_params })
+      });
+      const data = await res.json();
+      document.getElementById('config-status').innerText = data.message;
+    }
+
+    async function saveCmakeParams() {
+      // Read current llama-server params so we don't lose them
+      const rows = document.querySelectorAll('#params-list > div');
+      const params = [];
+      rows.forEach(row => {
+        const flag = row.querySelector('.flag-input').value.trim();
+        const value = row.querySelector('.value-input').value.trim();
+        if (flag) params.push({ flag, value });
+      });
+      const cmake_params = document.getElementById('cmake-params').value.trim();
+
+      document.getElementById('cmake-status').innerText = "Saving…";
+      const res = await fetch('/api/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ params, cmake_params })
+      });
+      const data = await res.json();
+      // saveCmakeParams only saves; the build will pick up new flags on next Build click
+      document.getElementById('cmake-status').innerText = data.success
+        ? 'Saved. Click “Build Latest” to apply.'
+        : data.message;
+    }
+
+    function renderCmakePresets(presets) {
+      const container = document.getElementById('cmake-presets');
+      // Keep only the label span, remove old buttons
+      container.querySelectorAll('button').forEach(b => b.remove());
+      (presets || []).forEach(preset => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'cmake-preset-btn text-xs px-3 py-1 rounded border border-gray-300 bg-gray-50 hover:bg-blue-50 hover:border-blue-400 hover:text-blue-700 transition-colors font-mono';
+        btn.textContent = preset.label;
+        btn.addEventListener('click', () => {
+          document.getElementById('cmake-params').value = preset.flags;
+          // Highlight active
+          container.querySelectorAll('.cmake-preset-btn').forEach(b => {
+            b.classList.remove('ring-2', 'ring-blue-400', 'bg-blue-50', 'border-blue-400', 'text-blue-700');
+          });
+          btn.classList.add('ring-2', 'ring-blue-400', 'bg-blue-50', 'border-blue-400', 'text-blue-700');
+        });
+        container.appendChild(btn);
+      });
+    }
+
+
+    // ── Status pipeline ──────────────────────────────────────────────────
+    function setVisible(el, show) {
+      if (show) { el.classList.remove('hidden'); el.classList.add('inline-flex'); }
+      else      { el.classList.add('hidden'); el.classList.remove('inline-flex'); }
+    }
+
+    async function pollStatus() {
+      try {
+        const res = await fetch('/api/status');
+        const data = await res.json();
+
+        const stageBinary = document.getElementById('stage-binary');
+        const stageStatus = document.getElementById('stage-status');
+        const statusDot   = document.getElementById('status-dot');
+        const statusLabel = document.getElementById('status-label');
+        const serverLink  = document.getElementById('server-link');
+        const btnEditUrl  = document.getElementById('btn-edit-url');
+
+        // Stage 1: Binary not built → amber pill
+        setVisible(stageBinary, !data.binary_built);
+
+        // Stage 2: Run status (only when binary exists)
+        setVisible(stageStatus, data.binary_built);
+        if (data.binary_built) {
+          if (data.server_running) {
+            stageStatus.className = 'inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/80 shadow-sm';
+            statusDot.innerHTML = '<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span><span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>';
+            statusLabel.textContent = 'Running';
+          } else {
+            stageStatus.className = 'inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-red-50 text-red-600 border border-red-200/80 shadow-sm';
+            statusDot.innerHTML = '<span class="relative inline-flex rounded-full h-2 w-2 bg-red-400"></span>';
+            statusLabel.textContent = 'Stopped';
+          }
+        }
+
+        // Stage 3: Server link + edit button (only when running)
+        setVisible(serverLink, data.binary_built && data.server_running);
+        setVisible(btnEditUrl, data.binary_built && data.server_running);
+      } catch (_) { }
+    }
+
+    // ── Server URL editor ────────────────────────────────────────────────
+    function toggleUrlEditor() {
+      const editor = document.getElementById('url-editor');
+      const isHidden = editor.classList.contains('hidden');
+      if (isHidden) {
+        editor.classList.remove('hidden');
+        editor.classList.add('inline-flex');
+        document.getElementById('url-input').focus();
+      } else {
+        editor.classList.add('hidden');
+        editor.classList.remove('inline-flex');
+      }
+    }
+
+    async function saveServerUrl() {
+      const url = document.getElementById('url-input').value.trim();
+      if (!url) return;
+      try {
+        await fetch('/api/server-url', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url })
+        });
+        // Update the link href immediately
+        document.getElementById('server-link').href = url;
+        toggleUrlEditor();
+      } catch (e) {
+        alert('Failed to save URL: ' + e);
+      }
+    }
+
+    // ── Log polling ──────────────────────────────────────────────────────
+    async function pollLogs() {
+      try {
+        const [sRes, bRes] = await Promise.all([fetch('/api/logs'), fetch('/api/build-logs')]);
+        const sData = await sRes.json();
+        const bData = await bRes.json();
+
+        const serverEl = document.getElementById('logs-server');
+        serverEl.innerText = sData.logs;
+        serverEl.scrollTop = serverEl.scrollHeight;
+
+        const buildEl = document.getElementById('logs-build');
+        buildEl.innerText = bData.logs;
+        buildEl.scrollTop = buildEl.scrollHeight;
+      } catch (_) { }
+    }
+
+    loadConfig();
+    loadModels();
+    setInterval(pollStatus, 3000);
+    setInterval(pollLogs, 2000);
+    setInterval(loadModels, 10000);
+    pollStatus();
+    pollLogs();
+  </script>
+</body>
+
+</html>
