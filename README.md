@@ -1,7 +1,11 @@
 # Llama Web UI
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![GitHub Repository](https://img.shields.io/badge/GitHub-vm75%2Fllama--web--ui-181717?style=flat&logo=github)](https://github.com/vm75/llama-web-ui)
 [![Docker Image](https://img.shields.io/docker/v/vm75/llama-web-ui?label=Docker%20Hub)](https://hub.docker.com/r/vm75/llama-web-ui)
+[![Docker Pulls](https://img.shields.io/docker/pulls/vm75/llama-web-ui)](https://hub.docker.com/r/vm75/llama-web-ui)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/vm75/llama-web-ui/docker-publish.yml?branch=main&label=build)](https://github.com/vm75/llama-web-ui/actions)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Podman Ready](https://img.shields.io/badge/Podman-Rootless%20Ready-892CA0?logo=podman&logoColor=white)](#)
 
 A lightweight, minimal control plane for [`llama.cpp`](https://github.com/ggml-org/llama.cpp). It runs inside a rootless Podman/Docker container and uses a Python Flask backend paired with a vanilla HTML/JS/Tailwind frontend.
 
