@@ -67,6 +67,7 @@ docker run -d \
 ## Models
 
 Models are stored in `./data/models/` on the host (mounted to `/home/llama/app/data/models` inside the container). You can:
+- **Download from Hugging Face** — directly download `.gguf` files via the UI using a repo/filename or URL.
 - **Upload via the web UI** — works well for smaller models.
 - **Copy directly** — for models >2 GB, place `.gguf` files straight into `./data/models/`.
 

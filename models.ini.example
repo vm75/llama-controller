@@ -1,0 +1,53 @@
+# =================================================================
+# Llama.cpp Server Model Presets
+# Run with: llama-server --models-preset models.ini
+# =================================================================
+
+[*]
+# Global settings applied to all models (unless explicitly overridden below)
+mmap = 1
+parallel = 4
+threads = 8
+batch-size = 512
+temp = 0.8
+top-p = 0.95
+
+# -----------------------------------------------------------------
+# Scenario A: Hugging Face Model (Standard Configuration)
+# -----------------------------------------------------------------
+[Llama-3-8B-Standard]
+hf = unsloth/Llama-3-8B-Instruct-GGUF:Q4_K_M
+ctx-size = 8192
+n-gpu-layers = 33
+# temp and top-p will be inherited from the [*] global section
+
+# -----------------------------------------------------------------
+# Scenario B: SAME Hugging Face Model (Massive Context Configuration)
+# -----------------------------------------------------------------
+[Llama-3-8B-Long-Context]
+hf = unsloth/Llama-3-8B-Instruct-GGUF:Q4_K_M
+ctx-size = 32768
+n-gpu-layers = 20      # Offloading fewer layers to save VRAM for the larger context
+rope-freq-scale = 0.25 # Adjusting RoPE for extended context (if model requires it)
+batch-size = 1024      # Overriding the global batch size
+
+# -----------------------------------------------------------------
+# Scenario C: Local Model (Relative Path) - Coding Optimized
+# -----------------------------------------------------------------
+[CodeQwen-Local]
+model = ./models/CodeQwen1.5-7B-Chat-Q5_K_M.gguf
+ctx-size = 4096
+temp = 0.1             # Low temperature for strict, deterministic code generation
+top-p = 0.9
+top-k = 40
+presence-penalty = 0.0
+
+# -----------------------------------------------------------------
+# Scenario D: Local Model (Absolute Path) - Creative Writing
+# -----------------------------------------------------------------
+[Mistral-Creative]
+model = /var/lib/ai/models/mistral-7b-instruct-v0.2.Q6_K.gguf
+ctx-size = 8192
+temp = 1.1             # High temperature for creative outputs
+min-p = 0.05
+top-k = 0              # Disabling top-k for min-p sampling

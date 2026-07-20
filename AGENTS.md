@@ -111,6 +111,7 @@ All routes are defined in `server/server.py`. All API responses are JSON.
 | `POST` | `/api/server-url` | Update the `llama_server_url` field | Writes config.json (no restart) |
 | `GET` | `/api/models` | List model files with sizes | — |
 | `POST` | `/api/upload` | Upload a model file | Saves to models/, restarts server |
+| `POST` | `/api/download` | Download a model from HF | Saves to models/, restarts server (SSE stream) |
 | `DELETE` | `/api/models/<filename>` | Delete a model file | Removes file, restarts server |
 | `POST` | `/api/build` | Clone/update llama.cpp and build | Long-running, writes build logs, auto-starts |
 | `GET` | `/api/logs` | Last 100 lines of server logs | — |
@@ -145,5 +146,6 @@ All routes are defined in `server/server.py`. All API responses are JSON.
 
 * **File Modifications:** Keep changes strictly scoped to the user's request.
 * **Podman Compatibility:** Ensure all Dockerfile and compose changes remain compatible with rootless Podman (e.g., preserving `userns_mode: keep-id` and `:Z` volume mounts).
-* **Model Handling:** Models >2GB are typically volume-mounted by the user rather than uploaded via the web UI. Keep upload logic straightforward.
+* **Model Handling:** Models >2GB are typically volume-mounted by the user or downloaded directly from Hugging Face via the web UI (which supports SSE streaming). Keep upload/download logic straightforward.
 * **Signal Handling:** `server.py` traps `SIGTERM`/`SIGINT` to gracefully stop the child `llama-server` process before exiting.
+* **Documentation:** Whenever features are added, modified, or removed, you MUST update both `README.md` and `AGENTS.md` to capture these changes (e.g. updating API route tables, feature lists, or system architecture).

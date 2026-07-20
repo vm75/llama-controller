@@ -3,7 +3,8 @@ import sys
 import json
 import signal
 import subprocess
-from flask import Flask, render_template, request, jsonify, send_from_directory
+import urllib.request
+from flask import Flask, render_template, request, jsonify, send_from_directory, Response, stream_with_context
 
 # server.py lives in server/; the app root is one level up.
 APP_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
@@ -241,6 +242,48 @@ def delete_model(filename):
   os.remove(safe_path)
   start_llama()
   return jsonify({"success": True, "message": f"Deleted {filename} and restarted server."})
+
+@app.route('/api/download', methods=['POST'])
+def download_model():
+  """Stream a GGUF model download from Hugging Face with SSE progress events."""
+  body = request.get_json(force=True)
+  repo = (body.get('repo') or '').strip()
+  filename = (body.get('filename') or '').strip()
+  if not repo or not filename:
+    return jsonify({"success": False, "message": "Both 'repo' and 'filename' are required."}), 400
+  if not filename.lower().endswith('.gguf'):
+    return jsonify({"success": False, "message": "Only .gguf files are supported."}), 400
+  safe_name = os.path.basename(filename)
+  dest = os.path.join(MODELS_DIR, safe_name)
+  url = f"https://huggingface.co/{repo}/resolve/main/{filename}"
+
+  def generate():
+    try:
+      req = urllib.request.urlopen(url)
+      total = int(req.headers.get('Content-Length') or 0)
+      downloaded = 0
+      chunk_size = 512 * 1024  # 512 KB
+      with open(dest, 'wb') as f:
+        while True:
+          chunk = req.read(chunk_size)
+          if not chunk:
+            break
+          f.write(chunk)
+          downloaded += len(chunk)
+          pct = int(downloaded * 100 / total) if total else 0
+          yield f"data: {json.dumps({'progress': pct, 'downloaded': downloaded, 'total': total})}\n\n"
+      start_llama()
+      yield f"data: {json.dumps({'success': True, 'message': f'Downloaded {safe_name} and restarted server.'})}\n\n"
+    except Exception as e:
+      if os.path.exists(dest):
+        os.remove(dest)
+      yield f"data: {json.dumps({'success': False, 'message': f'Download failed: {e}'})}\n\n"
+
+  return Response(
+    stream_with_context(generate()),
+    mimetype='text/event-stream',
+    headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'}
+  )
 
 @app.route('/api/logs')
 def get_logs():

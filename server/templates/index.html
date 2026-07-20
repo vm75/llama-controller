@@ -69,9 +69,12 @@
     <div class="bg-white p-6 rounded-lg shadow">
       <div class="flex items-center justify-between mb-4">
         <h2 class="text-xl font-semibold">Models</h2>
-        <button id="btn-show-upload" onclick="toggleUploadForm()"
-          class="bg-green-600 text-white text-sm px-3 py-1.5 rounded hover:bg-green-700 transition-colors">⬆ Upload New
-          Model</button>
+        <div class="flex items-center gap-2">
+          <button id="btn-show-upload" onclick="toggleUploadForm()"
+            class="bg-green-600 text-white text-sm px-3 py-1.5 rounded hover:bg-green-700 transition-colors">⬆ Upload New Model</button>
+          <button onclick="openHfModal()"
+            class="bg-blue-600 text-white text-sm px-3 py-1.5 rounded hover:bg-blue-700 transition-colors">⬇ Download from HF</button>
+        </div>
       </div>
 
       <!-- Upload form (hidden by default) -->
@@ -91,6 +94,69 @@
       <!-- Model list -->
       <div id="models-list">
         <p class="text-sm text-gray-400 italic">Loading models…</p>
+      </div>
+    </div>
+
+    <!-- HF Download Modal -->
+    <div id="hf-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+      <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-lg mx-4">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-lg font-semibold">Download Model from Hugging Face</h3>
+          <button onclick="closeHfModal()" class="text-gray-400 hover:text-red-500 text-xl leading-none">×</button>
+        </div>
+
+        <!-- Mode selector -->
+        <div class="flex rounded border border-gray-200 overflow-hidden mb-4 text-sm">
+          <label class="flex-1 flex items-center justify-center gap-1.5 py-1.5 cursor-pointer bg-blue-50 border-r border-gray-200">
+            <input type="radio" name="hf-mode" id="hf-mode-repo" value="repo" checked onchange="hfSwitchMode()" class="accent-blue-600">
+            <span>Repo + Filename</span>
+          </label>
+          <label class="flex-1 flex items-center justify-center gap-1.5 py-1.5 cursor-pointer">
+            <input type="radio" name="hf-mode" id="hf-mode-url" value="url" onchange="hfSwitchMode()" class="accent-blue-600">
+            <span>URL</span>
+          </label>
+        </div>
+
+        <!-- Repo + Filename panel -->
+        <div id="hf-panel-repo" class="space-y-3">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Repository <span class="text-gray-400 font-normal">(e.g. <code>bartowski/Llama-3.2-1B-Instruct-GGUF</code>)</span></label>
+            <input id="hf-repo" type="text" placeholder="owner/repo"
+              class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Filename <span class="text-gray-400 font-normal">(.gguf)</span></label>
+            <input id="hf-filename" type="text" placeholder="model.Q4_K_M.gguf"
+              class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+          </div>
+        </div>
+
+        <!-- URL panel (hidden by default) -->
+        <div id="hf-panel-url" class="hidden space-y-3">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Hugging Face URL <span class="text-gray-400 font-normal">(blob or resolve link)</span></label>
+            <input id="hf-url" type="text" placeholder="https://huggingface.co/owner/repo/blob/main/model.gguf"
+              class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+          </div>
+        </div>
+
+        <!-- Progress block (hidden until download starts) -->
+        <div id="hf-progress-block" class="hidden mt-3 space-y-1">
+          <div class="flex justify-between text-xs text-gray-500 mb-0.5">
+            <span id="hf-progress-label">Downloading…</span>
+            <span id="hf-progress-pct"></span>
+          </div>
+          <div class="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+            <div id="hf-progress-bar" class="bg-blue-500 h-2 rounded-full transition-all duration-200" style="width:0%"></div>
+          </div>
+          <div id="hf-progress-size" class="text-xs text-gray-400 text-right"></div>
+        </div>
+        <p id="hf-status" class="text-sm min-h-[1.25rem] mt-2"></p>
+        <div class="flex justify-end gap-2 mt-4">
+          <button onclick="closeHfModal()" class="px-4 py-1.5 text-sm rounded border border-gray-300 hover:bg-gray-100">Cancel</button>
+          <button id="hf-download-btn" onclick="downloadFromHf()"
+            class="bg-blue-600 text-white px-4 py-1.5 text-sm rounded hover:bg-blue-700">Download</button>
+        </div>
       </div>
     </div>
 
@@ -265,6 +331,167 @@
     function toggleUploadForm() {
       const form = document.getElementById('upload-form');
       form.classList.toggle('hidden');
+    }
+
+    function openHfModal() {
+      document.getElementById('hf-mode-repo').checked = true;
+      document.getElementById('hf-repo').value = '';
+      document.getElementById('hf-filename').value = '';
+      document.getElementById('hf-url').value = '';
+      document.getElementById('hf-status').innerText = '';
+      document.getElementById('hf-download-btn').disabled = false;
+      document.getElementById('hf-progress-block').classList.add('hidden');
+      document.getElementById('hf-progress-bar').style.width = '0%';
+      document.getElementById('hf-progress-bar').classList.remove('animate-pulse');
+      hfSwitchMode();
+      document.getElementById('hf-modal').classList.remove('hidden');
+      document.getElementById('hf-repo').focus();
+    }
+
+    function closeHfModal() {
+      document.getElementById('hf-modal').classList.add('hidden');
+    }
+
+    function hfSwitchMode() {
+      const isUrl = document.getElementById('hf-mode-url').checked;
+      document.getElementById('hf-panel-repo').classList.toggle('hidden', isUrl);
+      document.getElementById('hf-panel-url').classList.toggle('hidden', !isUrl);
+      document.getElementById('hf-status').innerText = '';
+      setTimeout(() => {
+        if (isUrl) document.getElementById('hf-url').focus();
+        else document.getElementById('hf-repo').focus();
+      }, 0);
+    }
+
+    function hfParseUrl(rawUrl) {
+      // Accepts blob or resolve URLs:
+      // https://huggingface.co/owner/repo/blob/main/filename.gguf
+      // https://huggingface.co/owner/repo/resolve/main/filename.gguf
+      try {
+        const url = new URL(rawUrl);
+        if (url.hostname !== 'huggingface.co') return null;
+        const parts = url.pathname.split('/').filter(Boolean);
+        // parts[0]=owner, parts[1]=repo, parts[2]=blob|resolve, parts[3]=branch, parts[4..]=filename
+        const sepIdx = parts.findIndex(p => p === 'blob' || p === 'resolve');
+        if (sepIdx < 1 || parts.length <= sepIdx + 2) return null;
+        const repo = parts.slice(0, sepIdx).join('/');
+        const filename = parts.slice(sepIdx + 2).join('/');
+        return { repo, filename };
+      } catch { return null; }
+    }
+
+    async function downloadFromHf() {
+      const statusEl = document.getElementById('hf-status');
+      const btn = document.getElementById('hf-download-btn');
+      const cancelBtn = document.querySelector('#hf-modal button[onclick="closeHfModal()"]');
+      const modeRadios = document.querySelectorAll('#hf-modal input[type=radio]');
+      const progressBlock = document.getElementById('hf-progress-block');
+      const progressBar  = document.getElementById('hf-progress-bar');
+      const progressPct  = document.getElementById('hf-progress-pct');
+      const progressSize = document.getElementById('hf-progress-size');
+      const progressLabel = document.getElementById('hf-progress-label');
+      const isUrl = document.getElementById('hf-mode-url').checked;
+
+      let repo, filename;
+      if (isUrl) {
+        const raw = document.getElementById('hf-url').value.trim();
+        const parsed = hfParseUrl(raw);
+        if (!parsed) {
+          statusEl.innerText = 'Invalid Hugging Face URL. Expected: https://huggingface.co/owner/repo/blob/main/file.gguf';
+          statusEl.className = 'text-sm text-red-500 min-h-[1.25rem]';
+          return;
+        }
+        ({ repo, filename } = parsed);
+      } else {
+        repo = document.getElementById('hf-repo').value.trim();
+        filename = document.getElementById('hf-filename').value.trim();
+        if (!repo || !filename) {
+          statusEl.innerText = 'Please fill in both fields.';
+          statusEl.className = 'text-sm text-red-500 min-h-[1.25rem]';
+          return;
+        }
+      }
+
+      // Lock inputs, show progress block
+      btn.disabled = true;
+      if (cancelBtn) cancelBtn.disabled = true;
+      modeRadios.forEach(r => r.disabled = true);
+      document.getElementById('hf-repo').disabled = true;
+      document.getElementById('hf-filename').disabled = true;
+      document.getElementById('hf-url').disabled = true;
+      statusEl.innerText = '';
+      statusEl.className = 'text-sm min-h-[1.25rem] mt-2';
+      progressBlock.classList.remove('hidden');
+      progressBar.style.width = '0%';
+      progressPct.innerText = '';
+      progressSize.innerText = '';
+      progressLabel.innerText = 'Connecting…';
+
+      function unlockModal() {
+        btn.disabled = false;
+        if (cancelBtn) cancelBtn.disabled = false;
+        modeRadios.forEach(r => r.disabled = false);
+        document.getElementById('hf-repo').disabled = false;
+        document.getElementById('hf-filename').disabled = false;
+        document.getElementById('hf-url').disabled = false;
+      }
+
+      try {
+        const res = await fetch('/api/download', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ repo, filename })
+        });
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = '';
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          // SSE lines: "data: {...}\n\n"
+          let boundary;
+          while ((boundary = buf.indexOf('\n\n')) !== -1) {
+            const line = buf.slice(0, boundary).trim();
+            buf = buf.slice(boundary + 2);
+            if (!line.startsWith('data: ')) continue;
+            const ev = JSON.parse(line.slice(6));
+            if (ev.success !== undefined) {
+              // Final event
+              progressBlock.classList.add('hidden');
+              if (ev.success) {
+                statusEl.innerText = ev.message;
+                statusEl.className = 'text-sm text-green-600 min-h-[1.25rem] mt-2';
+                loadModels();
+                setTimeout(closeHfModal, 2500);
+              } else {
+                statusEl.innerText = ev.message;
+                statusEl.className = 'text-sm text-red-500 min-h-[1.25rem] mt-2';
+                unlockModal();
+              }
+            } else {
+              // Progress event
+              const { progress, downloaded, total } = ev;
+              progressLabel.innerText = 'Downloading…';
+              if (total > 0) {
+                progressBar.style.width = progress + '%';
+                progressPct.innerText = progress + '%';
+                progressSize.innerText = formatSize(downloaded) + ' / ' + formatSize(total);
+              } else {
+                // No Content-Length — indeterminate; animate bar
+                progressBar.style.width = '100%';
+                progressBar.classList.add('animate-pulse');
+                progressSize.innerText = formatSize(downloaded);
+              }
+            }
+          }
+        }
+      } catch (e) {
+        progressBlock.classList.add('hidden');
+        statusEl.innerText = 'Request failed: ' + e;
+        statusEl.className = 'text-sm text-red-500 min-h-[1.25rem] mt-2';
+        unlockModal();
+      }
     }
 
     function formatSize(bytes) {
