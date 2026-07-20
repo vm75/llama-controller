@@ -26,3 +26,4 @@ data/
 .env
 .env.*
 !.env.example
+docker-compose.yml

@@ -1,6 +1,6 @@
 # Llama Web UI
 
-A lightweight, minimal control plane for `llama.cpp`. It runs inside a rootless Podman/Docker container and uses a Python Flask backend paired with a vanilla HTML/JS/Tailwind frontend. 
+A lightweight, minimal control plane for `llama.cpp`. It runs inside a rootless Podman/Docker container and uses a Python Flask backend paired with a vanilla HTML/JS/Tailwind frontend.
 
 It manages compiling `llama.cpp` from source, handling model uploads, and controlling the process lifecycle of `llama-server` based on a JSON configuration file.
 
@@ -34,9 +34,9 @@ services:
       # Single data volume: holds config.json, models/, and any other runtime state
       - ./data:/home/llama/app/data:Z
       # Optional: cache the llama.cpp checkout & build between container restarts
-      # - ./llama.cpp:/home/llama/app/llama.cpp:Z
+      # - ./data/llama.cpp:/home/llama/app/llama.cpp:Z
       # Optional: cache the Python venv between container restarts
-      # - ./venv:/home/llama/app/venv:Z
+      # - ./data/venv:/home/llama/app/venv:Z
     restart: unless-stopped
 ```
 

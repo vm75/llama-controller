@@ -12,7 +12,7 @@ services:
       # Single data volume: holds config.json, models/, and any other runtime state
       - ./data:/home/llama/app/data:Z
       # Optional: cache the llama.cpp checkout & build between container restarts
-      - ./data/llama.cpp:/home/llama/app/llama.cpp:Z
+      # - ./data/llama.cpp:/home/llama/app/llama.cpp:Z
       # Optional: cache the Python venv between container restarts
-      - ./data/venv:/home/llama/app/venv:Z
+      # - ./data/venv:/home/llama/app/venv:Z
     restart: unless-stopped
