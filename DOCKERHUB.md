@@ -19,7 +19,7 @@ A lightweight, containerized control plane for [`llama.cpp`](https://github.com/
 - 🛠️ **In-Container Source Build:** Compile `llama.cpp` from source directly from the web UI with support for CPU, OpenBLAS, CUDA, ROCm, and Vulkan build presets and automatic `apt-get` package management.
 - 📦 **Hugging Face Downloader:** Search and download GGUF models directly from Hugging Face with real-time SSE progress streaming.
 - ⚙️ **Native Model Presets:** Add, edit, duplicate, and refresh serving presets stored in `data/models.ini`. Define inherited global parameters (`[*]`) and per-model flags (`n-gpu-layers`, `ctx-size`, `temp`, etc.).
-- 🔄 **Decoupled Lifecycle:** File downloads/uploads and preset configurations do not restart `llama-server` prematurely—restarts happen only when presets are modified or deleted.
+- 🔄 **Decoupled Storage Lifecycle:** File downloads/uploads open a prefilled preset modal without changing the active server; server restarts occur only when model presets are saved, modified, or deleted.
 - 🔒 **Rootless Podman Ready:** Purpose-built to run as a non-root user (`llama`) with full rootless Podman and Docker support.
 
 ---
@@ -53,8 +53,6 @@ docker run -d \
 Create a `docker-compose.yml` file:
 
 ```yaml
-version: '3.8'
-
 services:
   llama-controller:
     image: vm75/llama-controller:latest
@@ -65,6 +63,7 @@ services:
     environment:
       - LLAMA_CONTROLLER_PORT=${LLAMA_CONTROLLER_PORT:-5000}
       - LLAMA_SERVER_PORT=${LLAMA_SERVER_PORT:-8080}
+      - LLAMA_SERVER_URL=${LLAMA_SERVER_URL:-http://localhost:8080}
       - LLAMA_CPP_REPO=${LLAMA_CPP_REPO:-https://github.com/ggml-org/llama.cpp.git}
       - LLAMA_CPP_BRANCH=${LLAMA_CPP_BRANCH:-master}
     volumes:
@@ -92,6 +91,7 @@ Once running, access:
 |---|---|---|
 | `LLAMA_CONTROLLER_PORT` | `5000` | Port for the control plane web UI |
 | `LLAMA_SERVER_PORT` | `8080` | Port for the `llama-server` OpenAI-compatible API |
+| `LLAMA_SERVER_URL` | `http://localhost:8080` | Public URL link to `llama-server` displayed in the UI |
 | `LLAMA_CPP_REPO` | `https://github.com/ggml-org/llama.cpp.git` | `llama.cpp` Git repository URL |
 | `LLAMA_CPP_BRANCH` | `master` | Target `llama.cpp` branch to clone/build |
 

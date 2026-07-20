@@ -47,6 +47,7 @@ cp .env.example .env
 |---|---|---|
 | `LLAMA_CONTROLLER_PORT` | `5000` | Port for the control plane web UI |
 | `LLAMA_SERVER_PORT` | `8080` | Port for the llama-server inference API |
+| `LLAMA_SERVER_URL` | `http://localhost:8080` | Public URL link to llama-server displayed in the UI |
 | `LLAMA_CPP_REPO` | `https://github.com/ggml-org/llama.cpp.git` | Custom `llama.cpp` Git repository URL |
 | `LLAMA_CPP_BRANCH` | `master` | Target `llama.cpp` branch to clone/build |
 

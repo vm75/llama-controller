@@ -165,6 +165,7 @@ All routes are defined in `server/server.py`. All API responses are JSON.
 - **Environment variables:**
   - `LLAMA_CONTROLLER_PORT`: Web UI port (default `5000`)
   - `LLAMA_SERVER_PORT`: llama-server port (default `8080`)
+  - `LLAMA_SERVER_URL`: Public link to llama-server shown in UI (default `http://localhost:8080`)
   - `LLAMA_CPP_REPO`: `llama.cpp` Git repository URL (default `https://github.com/ggml-org/llama.cpp.git`)
   - `LLAMA_CPP_BRANCH`: `llama.cpp` target branch (default `master`)
 - **Volume mount:** `./data → /home/llama/app/data` (`:Z` for SELinux)
@@ -179,4 +180,4 @@ All routes are defined in `server/server.py`. All API responses are JSON.
 * **Podman Compatibility:** Ensure all Dockerfile and compose changes remain compatible with rootless Podman (e.g., preserving `userns_mode: keep-id` and `:Z` volume mounts).
 * **Model Handling:** Models >2GB are typically volume-mounted by the user or downloaded directly from Hugging Face via the web UI (which supports SSE streaming). Upload/download opens a prefilled preset modal without changing the server; deleting a file removes presets that reference it and then restarts the server.
 * **Signal Handling:** `server.py` traps `SIGTERM`/`SIGINT` to gracefully stop the child `llama-server` process before exiting.
-* **Documentation:** Whenever features are added, modified, or removed, you MUST update both `README.md` and `AGENTS.md` to capture these changes (e.g. updating API route tables, feature lists, or system architecture).
+* **Documentation:** Whenever features are added, modified, or removed, you MUST update both `README.md`, `DOCKERHUB.md` and `AGENTS.md` to capture these changes (e.g. updating API route tables, feature lists, or system architecture).
