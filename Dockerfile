@@ -34,9 +34,9 @@ COPY --chown=llama:llama config.default.json .
 COPY --chown=llama:llama models.ini.example .
 COPY --chown=llama:llama VERSION .
 
-# Pre-create the data directory so the volume mount lands cleanly
-# (models/ and the live config.json are created at runtime by ensure_data_dir)
-RUN mkdir -p data
+# Pre-create runtime directories so optional volume mounts land cleanly
+# (models/, live config, and profile trees are initialized by ensure_data_dir)
+RUN mkdir -p data build-profiles
 
 # Expose Web UI port and Llama.cpp port
 EXPOSE 5000 8080

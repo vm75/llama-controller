@@ -11,14 +11,12 @@ services:
       - LLAMA_CONTROLLER_PORT=${LLAMA_CONTROLLER_PORT:-5000}
       - LLAMA_SERVER_PORT=${LLAMA_SERVER_PORT:-8080}
       - LLAMA_SERVER_URL=${LLAMA_SERVER_URL:-http://localhost:8080}
-      - LLAMA_CPP_REPO=${LLAMA_CPP_REPO:-https://github.com/ggml-org/llama.cpp.git}
-      - LLAMA_CPP_BRANCH=${LLAMA_CPP_BRANCH:-master}
     volumes:
       # The :Z flag handles SELinux permissions automatically
-      # Single data volume: holds config.json, models/, and any other runtime state
+      # Single data volume: holds config.json, models.ini, and models/
       - ./data:/home/llama/app/data:Z
-      # Optional: cache the llama.cpp checkout & build between container restarts
-      # - ./data/llama.cpp:/home/llama/app/llama.cpp:Z
+      # Optional: cache Build Profile source trees and binaries between container restarts
+      # - ./build-profiles:/home/llama/app/build-profiles:Z
       # Optional: cache the Python venv between container restarts
       # - ./data/venv:/home/llama/app/venv:Z
     restart: unless-stopped

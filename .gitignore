@@ -10,6 +10,8 @@ __pycache__/
 
 # Local llama.cpp directory (cloned during runtime/compilation or for development)
 llama.cpp/
+# Optional persistent Build Profile source/build trees
+build-profiles/
 
 # IDEs and Editors
 .vscode/

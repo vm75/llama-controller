@@ -112,7 +112,7 @@
             </button>
           </div>
         </div>
-        <p class="text-xs text-gray-400">Downloads are stored here. Add a serving preset below to expose a model.</p>
+        <p class="text-xs text-gray-400">Primary models and optional mmproj/MTP companions are stored here. Attach them in a serving preset below.</p>
       </div>
 
       <!-- Model list -->
@@ -126,7 +126,7 @@
       onclick="closeModalOnBackdrop(event, 'upload-modal')">
       <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-lg mx-4">
         <div class="flex items-center justify-between mb-4">
-          <h3 class="text-lg font-semibold">Upload Model File</h3>
+          <h3 class="text-lg font-semibold">Upload GGUF File</h3>
           <button onclick="closeUploadModal()" class="text-gray-400 hover:text-red-500 text-xl leading-none">×</button>
         </div>
 
@@ -244,7 +244,7 @@
             </button>
           </div>
         </div>
-        <p class="text-xs text-gray-400">Backed by <code>data/models.ini</code>. Saving changes restarts llama-server.
+        <p class="text-xs text-gray-400">Backed by <code>data/models.ini</code>. The active build profile receives only compatible presets when llama-server restarts.
         </p>
       </div>
       <div id="presets-list" class="space-y-2">
@@ -274,6 +274,31 @@
                 class="w-full border border-gray-300 rounded px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-purple-400">
               <datalist id="model-file-options"></datalist>
             </div>
+          </div>
+          <div class="grid sm:grid-cols-2 gap-4">
+            <div>
+              <label for="preset-mmproj" class="block text-sm font-medium text-gray-700 mb-1">Multimodal projector <span class="font-normal text-gray-400">(optional)</span></label>
+              <input id="preset-mmproj" type="text" list="mmproj-file-options" placeholder="data/models/mmproj-model.gguf"
+                class="w-full border border-gray-300 rounded px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-purple-400">
+              <datalist id="mmproj-file-options"></datalist>
+              <p class="text-xs text-gray-400 mt-1">Written as <code>mmproj</code>.</p>
+            </div>
+            <div>
+              <label for="preset-mtp" class="block text-sm font-medium text-gray-700 mb-1">MTP draft file <span class="font-normal text-gray-400">(optional)</span></label>
+              <input id="preset-mtp" type="text" list="mtp-file-options" placeholder="data/models/mtp-model.gguf"
+                class="w-full border border-gray-300 rounded px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-purple-400">
+              <datalist id="mtp-file-options"></datalist>
+              <p class="text-xs text-gray-400 mt-1">Written as <code>spec-draft-model</code>; enables <code>draft-mtp</code>.</p>
+            </div>
+          </div>
+          <div>
+            <div class="flex items-center justify-between gap-3 mb-2">
+              <div>
+                <h4 class="text-sm font-semibold text-gray-700">Compatible Build Profiles</h4>
+                <p class="text-xs text-gray-400">Only these profiles will serve this model. Leave it compatible with all profiles for standard GGUFs.</p>
+              </div>
+            </div>
+            <div id="preset-build-profiles" class="rounded border border-gray-200 bg-gray-50 p-3 space-y-2"></div>
           </div>
           <div>
             <div class="flex items-center justify-between mb-2">
@@ -332,33 +357,68 @@
 
     <!-- Build settings panel -->
     <div class="bg-white p-6 rounded-lg shadow">
-      <h2 class="text-xl font-semibold mb-1">llama-server Build Settings <span
-          class="text-sm font-normal text-gray-400">(Applied on next Build)</span></h2>
-      <p class="text-xs text-gray-400 mb-3">Choose a preset to set its CMake flags and required packages together. <code
-          class="bg-gray-100 px-1 rounded">-DCMAKE_BUILD_TYPE=Release</code> is always enabled.</p>
-
-      <!-- Preset templates (rendered dynamically from config) -->
-      <div id="cmake-presets" class="flex flex-wrap gap-2 mb-3">
-        <span class="text-xs text-gray-500 self-center mr-1">Presets:</span>
+      <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-3 mb-4">
+        <div>
+          <h2 class="text-xl font-semibold mb-1">llama-server Build Profiles</h2>
+          <p class="text-xs text-gray-400">Each profile keeps its own repository checkout and build. The active profile supplies the running llama-server.</p>
+        </div>
+        <span id="active-build-profile-badge" class="self-start text-xs px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200"></span>
       </div>
 
-      <!-- Free-form textarea for CMake params -->
+      <div class="flex flex-col sm:flex-row gap-2 mb-4">
+        <select id="build-profile-select" onchange="selectBuildProfile(this.value)"
+          class="flex-1 rounded border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"></select>
+        <div class="flex flex-wrap gap-2">
+          <button type="button" onclick="newBuildProfile()" class="text-xs px-3 py-1.5 rounded border border-gray-300 hover:bg-gray-100">＋ New</button>
+          <button type="button" onclick="duplicateBuildProfile()" class="text-xs px-3 py-1.5 rounded border border-gray-300 hover:bg-gray-100">Duplicate</button>
+          <button type="button" onclick="deleteBuildProfile()" class="text-xs px-3 py-1.5 rounded border border-red-200 text-red-600 hover:bg-red-50">Delete</button>
+        </div>
+      </div>
+
+      <div class="grid sm:grid-cols-2 gap-3 mb-3">
+        <div>
+          <label class="block text-xs font-semibold text-gray-700 mb-1" for="build-profile-name">Profile Name</label>
+          <input id="build-profile-name" type="text" spellcheck="false" placeholder="Main llama.cpp"
+            class="w-full rounded border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-700 mb-1" for="build-profile-branch">Git Branch</label>
+          <input id="build-profile-branch" type="text" spellcheck="false" placeholder="master"
+            class="w-full rounded border border-gray-300 px-3 py-1.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-300">
+        </div>
+      </div>
+
+      <label class="block text-xs font-semibold text-gray-700 mb-1" for="build-profile-repo">Git Repository</label>
+      <input id="build-profile-repo" type="text" spellcheck="false" placeholder="https://github.com/ggml-org/llama.cpp.git"
+        class="w-full rounded border border-gray-300 px-3 py-1.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-300 mb-3">
+
+      <p class="text-xs text-gray-400 mb-2">Choose a template to set CMake flags and required packages together. <code
+          class="bg-gray-100 px-1 rounded">-DCMAKE_BUILD_TYPE=Release</code> is always enabled.</p>
+      <div id="cmake-presets" class="flex flex-wrap gap-2 mb-3">
+        <span class="text-xs text-gray-500 self-center mr-1">Templates:</span>
+      </div>
+
       <label class="block text-xs font-semibold text-gray-700 mb-1">CMake Flags</label>
       <textarea id="cmake-params" rows="2" spellcheck="false" oninput="syncCmakePresetHighlight()"
         placeholder="e.g. -DGGML_NATIVE=ON -DGGML_LTO=ON -DBUILD_SHARED_LIBS=OFF"
         class="w-full rounded border border-gray-300 px-3 py-2 text-sm font-mono text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-300 resize-y mb-3"></textarea>
 
-      <label class="block text-xs font-semibold text-gray-700 mb-1">Preset Packages <span
-          class="font-normal text-gray-400">(installed before the next build)</span></label>
+      <label class="block text-xs font-semibold text-gray-700 mb-1">Build Packages <span
+          class="font-normal text-gray-400">(installed before this profile builds)</span></label>
       <input id="extra-packages" type="text" spellcheck="false" oninput="syncCmakePresetHighlight()"
-        placeholder="Selected automatically by a preset; optional for custom builds"
+        placeholder="Selected automatically by a template; optional for custom builds"
         class="w-full rounded border border-gray-300 px-3 py-1.5 text-sm font-mono text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-300">
 
-      <div class="flex gap-3 mt-3">
+      <div class="flex flex-wrap items-center gap-2 mt-4">
+        <button id="btn-save-profile" type="button" onclick="saveBuildProfile()"
+          class="border border-gray-300 text-gray-700 text-sm px-4 py-1.5 rounded hover:bg-gray-100 transition-colors">Save Profile</button>
+        <button id="btn-activate-profile" type="button" onclick="activateBuildProfile()"
+          class="border border-emerald-300 text-emerald-700 text-sm px-4 py-1.5 rounded hover:bg-emerald-50 transition-colors">Save &amp; Set Active</button>
         <button id="btn-build" type="button" onclick="buildLlama()"
           class="bg-blue-600 text-white text-sm px-4 py-1.5 rounded hover:bg-blue-700 transition-colors">Save &amp; Build</button>
-        <span id="build-status" class="text-xs text-gray-500 italic self-center"></span>
+        <span id="build-status" class="text-xs text-gray-500 italic"></span>
       </div>
+      <p class="text-[11px] text-gray-400 mt-2">Deleting a profile removes only its configuration; its checkout remains under <code>build-profiles/</code>.</p>
     </div>
 
     <!-- Tabbed log panel -->
@@ -396,6 +456,9 @@
     let availableModels = [];
     let presetConfig = { version: '1', global_params: [], presets: [] };
     let editingPresetIndex = null;
+    let buildConfig = { active_build_profile: '', build_profiles: [], cmake_presets: [] };
+    let selectedBuildProfileId = null;
+    const RESERVED_PRESET_KEYS = ['model', 'mmproj', 'spec-draft-model', 'model-draft'];
 
     // ── Help modal ───────────────────────────────────────────────────────────
     async function openHelp() {
@@ -454,32 +517,172 @@
       });
     }
 
+    function selectedBuildProfile() {
+      return (buildConfig.build_profiles || []).find(profile => profile.id === selectedBuildProfileId);
+    }
+
+    function updateSelectedBuildProfileFromForm(validate = true) {
+      const profile = selectedBuildProfile();
+      if (!profile) return null;
+      const values = {
+        name: document.getElementById('build-profile-name').value.trim(),
+        repo_url: document.getElementById('build-profile-repo').value.trim(),
+        branch: document.getElementById('build-profile-branch').value.trim(),
+        cmake_params: document.getElementById('cmake-params').value.trim(),
+        extra_packages: document.getElementById('extra-packages').value.trim()
+      };
+      if (validate) {
+        if (!values.name || !values.repo_url || !values.branch) throw new Error('Profile name, repository, and branch are required.');
+        if (/\s/.test(values.repo_url) || values.repo_url.startsWith('-')) throw new Error('Repository URL cannot contain whitespace or begin with a dash.');
+        if (/\s/.test(values.branch) || values.branch.startsWith('-')) throw new Error('Branch must be one value and cannot begin with a dash.');
+      }
+      Object.assign(profile, values);
+      return profile;
+    }
+
+    function renderSelectedBuildProfile() {
+      const profile = selectedBuildProfile();
+      if (!profile) return;
+      document.getElementById('build-profile-select').value = profile.id;
+      document.getElementById('build-profile-name').value = profile.name || '';
+      document.getElementById('build-profile-repo').value = profile.repo_url || '';
+      document.getElementById('build-profile-branch').value = profile.branch || '';
+      document.getElementById('cmake-params').value = profile.cmake_params || '';
+      document.getElementById('extra-packages').value = profile.extra_packages || '';
+      const isActive = profile.id === buildConfig.active_build_profile;
+      const activateBtn = document.getElementById('btn-activate-profile');
+      activateBtn.disabled = isActive;
+      activateBtn.classList.toggle('opacity-40', isActive);
+      activateBtn.innerText = isActive ? 'Active Profile' : 'Save & Set Active';
+      syncCmakePresetHighlight();
+    }
+
+    function renderBuildProfileSelector() {
+      const select = document.getElementById('build-profile-select');
+      select.innerHTML = '';
+      (buildConfig.build_profiles || []).forEach(profile => {
+        const option = document.createElement('option');
+        option.value = profile.id;
+        option.textContent = `${profile.name}${profile.id === buildConfig.active_build_profile ? ' (active)' : ''}`;
+        select.appendChild(option);
+      });
+      const active = (buildConfig.build_profiles || []).find(profile => profile.id === buildConfig.active_build_profile);
+      document.getElementById('active-build-profile-badge').innerText = `Active: ${active?.name || 'None'}`;
+      renderSelectedBuildProfile();
+    }
+
+    function selectBuildProfile(profileId) {
+      if (selectedBuildProfile()) updateSelectedBuildProfileFromForm(false);
+      selectedBuildProfileId = profileId;
+      renderSelectedBuildProfile();
+    }
+
+    function uniqueBuildProfileId() {
+      let id;
+      do id = `profile-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+      while ((buildConfig.build_profiles || []).some(profile => profile.id === id));
+      return id;
+    }
+
+    function newBuildProfile() {
+      if (selectedBuildProfile()) updateSelectedBuildProfileFromForm(false);
+      const firstTemplate = (buildConfig.cmake_presets || [])[0] || {};
+      const profile = {
+        id: uniqueBuildProfileId(),
+        name: 'New llama-server Profile',
+        repo_url: 'https://github.com/ggml-org/llama.cpp.git',
+        branch: 'master',
+        cmake_params: firstTemplate.flags || '',
+        extra_packages: firstTemplate.extra_packages || ''
+      };
+      buildConfig.build_profiles.push(profile);
+      selectedBuildProfileId = profile.id;
+      renderBuildProfileSelector();
+      document.getElementById('build-profile-name').focus();
+      document.getElementById('build-profile-name').select();
+    }
+
+    function duplicateBuildProfile() {
+      const source = updateSelectedBuildProfileFromForm(false);
+      if (!source) return;
+      const profile = JSON.parse(JSON.stringify(source));
+      profile.id = uniqueBuildProfileId();
+      profile.name = `${source.name} Copy`;
+      buildConfig.build_profiles.push(profile);
+      selectedBuildProfileId = profile.id;
+      renderBuildProfileSelector();
+    }
+
+    async function persistBuildProfiles(activate = false) {
+      const status = document.getElementById('build-status');
+      try {
+        const profile = updateSelectedBuildProfileFromForm(true);
+        if (!profile) throw new Error('Select a build profile first.');
+        if (activate) buildConfig.active_build_profile = profile.id;
+        status.innerText = 'Saving profile…';
+        const res = await fetch('/api/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            build_profiles: buildConfig.build_profiles,
+            active_build_profile: buildConfig.active_build_profile
+          })
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.message || 'Could not save build profiles.');
+        status.innerText = data.message;
+        await loadConfig(profile.id);
+        return true;
+      } catch (e) {
+        status.innerText = e.message || String(e);
+        return false;
+      }
+    }
+
+    async function saveBuildProfile() {
+      await persistBuildProfiles(false);
+    }
+
+    async function activateBuildProfile() {
+      await persistBuildProfiles(true);
+      await pollStatus();
+    }
+
+    async function deleteBuildProfile() {
+      const profile = selectedBuildProfile();
+      if (!profile) return;
+      if (buildConfig.build_profiles.length === 1) {
+        document.getElementById('build-status').innerText = 'At least one build profile is required.';
+        return;
+      }
+      if (!confirm(`Delete profile "${profile.name}"? Its checkout and build files will be kept.`)) return;
+      buildConfig.build_profiles = buildConfig.build_profiles.filter(item => item.id !== profile.id);
+      if (buildConfig.active_build_profile === profile.id) buildConfig.active_build_profile = buildConfig.build_profiles[0].id;
+      // Always select a surviving profile before persisting the edited list.
+      selectedBuildProfileId = buildConfig.active_build_profile;
+      renderBuildProfileSelector();
+      await persistBuildProfiles(false);
+      await pollStatus();
+    }
+
     async function buildLlama() {
       const btn = document.getElementById('btn-build');
       btn.disabled = true;
       btn.classList.add('opacity-50', 'cursor-not-allowed');
       const status = document.getElementById('build-status');
       try {
-        status.innerText = "Saving settings…";
-        const configRes = await fetch('/api/config', {
+        if (!await persistBuildProfiles(false)) return;
+        const profileId = selectedBuildProfileId;
+        status.innerText = 'Building…';
+        switchTab('build');
+        const res = await fetch('/api/build', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            cmake_params: document.getElementById('cmake-params').value.trim(),
-            extra_packages: document.getElementById('extra-packages').value.trim()
-          })
+          body: JSON.stringify({ profile_id: profileId })
         });
-        const configData = await configRes.json();
-        if (!configRes.ok || !configData.success) {
-          status.innerText = configData.message || 'Could not save build settings.';
-          return;
-        }
-
-        status.innerText = "Building…";
-        switchTab('build');
-        const res = await fetch('/api/build', { method: 'POST' });
         const data = await res.json();
         status.innerText = data.message;
+        await pollStatus();
       } catch (e) {
         status.innerText = 'Build request failed: ' + e;
       } finally {
@@ -506,6 +709,17 @@
       const btn = document.getElementById('upload-btn');
       if (btn && btn.disabled) return;
       document.getElementById('upload-modal').classList.add('hidden');
+    }
+
+    function finishStoredFile(data, closeModal) {
+      closeModal();
+      if (data.kind === 'model') {
+        openPresetModal(null, `data/models/${data.filename}`);
+        return;
+      }
+      const status = document.getElementById('preset-status');
+      status.innerText = `${data.message} Edit a serving preset to attach it.`;
+      status.className = 'text-sm text-green-600 mt-3';
     }
 
     async function uploadFile() {
@@ -539,8 +753,10 @@
           fileInput.value = '';
           await loadModels();
           await loadModelPresets();
-          closeUploadModal();
-          openPresetModal(null, `data/models/${data.filename}`);
+          btn.disabled = false;
+          if (cancelBtn) cancelBtn.disabled = false;
+          fileInput.disabled = false;
+          finishStoredFile(data, closeUploadModal);
         } else {
           statusEl.innerText = data.message || 'Upload failed.';
           statusEl.className = 'text-sm text-red-500 min-h-[1.25rem] mt-2';
@@ -688,8 +904,8 @@
                 statusEl.className = 'text-sm text-green-600 min-h-[1.25rem] mt-2';
                 await loadModels();
                 await loadModelPresets();
-                closeHfModal();
-                openPresetModal(null, `data/models/${ev.filename}`);
+                finishStoredFile(ev, closeHfModal);
+                unlockModal();
               } else {
                 statusEl.innerText = ev.message;
                 statusEl.className = 'text-sm text-red-500 min-h-[1.25rem] mt-2';
@@ -737,26 +953,34 @@
           container.innerHTML = '<p class="text-sm text-gray-400 italic">No models found in the models directory.</p>';
           return;
         }
-        container.innerHTML = data.models.map(m => `
-          <div class="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
-            <span class="text-sm font-mono text-gray-800">${escHtml(m.name)}</span>
-            <div class="flex items-center gap-3">
-              <span class="text-xs text-gray-400">${formatSize(m.size)}</span>
-              <button onclick="deleteModel('${escHtml(m.name)}')"
-                class="text-gray-300 hover:text-red-500 transition-colors" title="Delete model">
-                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
-                </svg>
-              </button>
-            </div>
-          </div>`).join('');
+        const kindLabels = { model: 'Model', mmproj: 'mmproj', mtp: 'MTP' };
+        container.innerHTML = data.models.map(m => {
+          const badgeClass = m.kind === 'model' ? 'bg-gray-100 text-gray-500' : 'bg-purple-50 text-purple-600';
+          return `
+            <div class="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
+              <div class="min-w-0 flex items-center gap-2">
+                <span class="text-sm font-mono text-gray-800 truncate">${escHtml(m.name)}</span>
+                <span class="text-[10px] px-1.5 py-0.5 rounded ${badgeClass}">${kindLabels[m.kind] || 'File'}</span>
+              </div>
+              <div class="flex items-center gap-3 shrink-0">
+                <span class="text-xs text-gray-400">${formatSize(m.size)}</span>
+                <button onclick="deleteModel(decodeURIComponent('${encodeURIComponent(m.name).replace(/'/g, '%27')}'), '${escHtml(m.kind)}')"
+                  class="text-gray-300 hover:text-red-500 transition-colors" title="Delete file">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
+                  </svg>
+                </button>
+              </div>
+            </div>`;
+        }).join('');
       } catch (e) {
         document.getElementById('models-list').innerHTML = '<p class="text-sm text-red-400">Failed to load models.</p>';
       }
     }
 
-    async function deleteModel(name) {
-      if (!confirm(`Delete "${name}"? Any serving presets using this file will also be deleted.`)) return;
+    async function deleteModel(name, kind = 'model') {
+      const effect = kind === 'model' ? 'Serving presets using it will also be deleted.' : 'Its references will be removed from serving presets.';
+      if (!confirm(`Delete "${name}"? ${effect}`)) return;
       const res = await fetch(`/api/models/${encodeURIComponent(name)}`, { method: 'DELETE' });
       const data = await res.json();
       if (data.success) {
@@ -807,12 +1031,45 @@
 
     function renderModelFileOptions() {
       document.getElementById('model-file-options').innerHTML = availableModels
+        .filter(model => model.kind === 'model')
+        .map(model => `<option value="data/models/${escHtml(model.name)}"></option>`)
+        .join('');
+      document.getElementById('mmproj-file-options').innerHTML = availableModels
+        .filter(model => model.kind === 'mmproj')
+        .map(model => `<option value="data/models/${escHtml(model.name)}"></option>`)
+        .join('');
+      document.getElementById('mtp-file-options').innerHTML = availableModels
+        .filter(model => model.kind === 'mtp')
         .map(model => `<option value="data/models/${escHtml(model.name)}"></option>`)
         .join('');
     }
 
+    function presetParam(preset, ...keys) {
+      return (preset.params || []).find(param => keys.includes(param.key))?.value || '';
+    }
+
     function modelParam(preset) {
-      return (preset.params || []).find(param => param.key === 'model')?.value || '';
+      return presetParam(preset, 'model');
+    }
+
+    function activeBuildProfileId() {
+      return buildConfig.active_build_profile || presetConfig.active_profile?.id || '';
+    }
+
+    function presetSupportsActiveProfile(preset) {
+      const buildProfiles = preset.build_profiles;
+      return buildProfiles === null || buildProfiles === undefined || buildProfiles.includes(activeBuildProfileId());
+    }
+
+    function profileLabel(profileId) {
+      const profile = (buildConfig.build_profiles || []).find(item => item.id === profileId);
+      return profile ? profile.name : `Missing profile: ${profileId}`;
+    }
+
+    function presetBuildProfileLabel(buildProfiles) {
+      if (buildProfiles === null || buildProfiles === undefined) return 'All Build Profiles';
+      if (!buildProfiles.length) return 'No compatible profiles';
+      return buildProfiles.map(profileLabel).join(', ');
     }
 
     function renderModelPresets() {
@@ -822,12 +1079,23 @@
         container.innerHTML = '<div class="border border-dashed border-gray-300 rounded-lg p-5 text-center"><p class="text-sm text-gray-500">No serving presets configured.</p><p class="text-xs text-gray-400 mt-1">Downloaded files remain inactive until you add a preset.</p></div>';
         return;
       }
+      const activeProfile = (buildConfig.build_profiles || []).find(profile => profile.id === activeBuildProfileId()) || presetConfig.active_profile;
       container.innerHTML = presets.map((preset, index) => {
         const model = modelParam(preset);
-        const parameterCount = (preset.params || []).filter(param => param.key !== 'model').length;
-        const status = preset.model_exists
-          ? '<span title="Model found" class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-600 cursor-help shrink-0"><svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>'
-          : '<span title="Model file missing" class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-50 border border-amber-200 text-amber-600 cursor-help shrink-0"><svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>';
+        const mmproj = presetParam(preset, 'mmproj');
+        const mtp = presetParam(preset, 'spec-draft-model', 'model-draft');
+        const parameterCount = (preset.params || []).filter(param => !RESERVED_PRESET_KEYS.includes(param.key)).length;
+        const missingFiles = [!preset.model_exists ? 'model' : '', mmproj && preset.mmproj_exists === false ? 'mmproj' : '', mtp && preset.mtp_exists === false ? 'MTP draft' : ''].filter(Boolean);
+        const status = missingFiles.length === 0
+          ? '<span title="All configured files found" class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-600 cursor-help shrink-0"><svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>'
+          : `<span title="Missing: ${escHtml(missingFiles.join(', '))}" class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-50 border border-amber-200 text-amber-600 cursor-help shrink-0"><svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>`;
+        const companionBadges = [mmproj ? `<span title="${escHtml(mmproj)}" class="text-[10px] px-1.5 py-0.5 rounded ${preset.mmproj_exists === false ? 'bg-amber-50 text-amber-600' : 'bg-blue-50 text-blue-600'}">mmproj</span>` : '', mtp ? `<span title="${escHtml(mtp)}" class="text-[10px] px-1.5 py-0.5 rounded ${preset.mtp_exists === false ? 'bg-amber-50 text-amber-600' : 'bg-purple-50 text-purple-600'}">MTP</span>` : ''].filter(Boolean).join('');
+        const compatible = presetSupportsActiveProfile(preset);
+        const compatibilityLabel = presetBuildProfileLabel(preset.build_profiles);
+        const availabilityBadge = compatible
+          ? `<span title="Served by active profile ${escHtml(activeProfile?.name || activeBuildProfileId())}" class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700">Served</span>`
+          : `<span title="Not served by active profile ${escHtml(activeProfile?.name || activeBuildProfileId())}" class="text-[10px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-700">Not served</span>`;
+        const profileBadge = `<span title="${escHtml(compatibilityLabel)}" class="text-[10px] px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700">${escHtml(compatibilityLabel)}</span>`;
         return `
           <div class="p-3 border border-gray-200 rounded-lg hover:border-gray-300 transition-colors">
             <div class="flex items-center gap-2">
@@ -835,6 +1103,7 @@
               ${status}
             </div>
             <p class="text-xs text-gray-500 font-mono truncate mt-1">${escHtml(model || 'No model path configured')}</p>
+            <div class="flex flex-wrap items-center gap-1 mt-1">${availabilityBadge}${profileBadge}${companionBadges}</div>
             <div class="flex items-center justify-between gap-4 mt-2">
               <p class="text-xs text-gray-400">${parameterCount} preset parameter${parameterCount === 1 ? '' : 's'}</p>
               <div class="flex items-center gap-1 sm:gap-2 shrink-0">
@@ -859,6 +1128,39 @@
       }).join('');
     }
 
+    function renderPresetBuildProfileChoices(buildProfiles) {
+      const container = document.getElementById('preset-build-profiles');
+      const allProfiles = buildProfiles === null || buildProfiles === undefined;
+      const profiles = buildConfig.build_profiles || [];
+      const options = profiles.map(profile => {
+        const checked = !allProfiles && buildProfiles.includes(profile.id);
+        const active = profile.id === activeBuildProfileId() ? ' <span class="text-emerald-600">(active)</span>' : '';
+        return `<label class="flex items-center gap-2 text-sm text-gray-700"><input type="checkbox" class="preset-build-profile-choice accent-purple-600" value="${escHtml(profile.id)}" ${checked ? 'checked' : ''} onchange="syncPresetBuildProfileChoices(this)"><span>${escHtml(profile.name)}${active}</span></label>`;
+      }).join('');
+      const unavailable = !allProfiles && buildProfiles.filter(profileId => !profiles.some(profile => profile.id === profileId));
+      container.innerHTML = `
+        <label class="flex items-center gap-2 text-sm font-medium text-gray-700"><input id="preset-build-profiles-all" type="checkbox" class="accent-purple-600" ${allProfiles ? 'checked' : ''} onchange="syncPresetBuildProfileChoices(this)"><span>All Build Profiles</span></label>
+        ${options || '<p class="text-xs text-amber-600">Create a Build Profile before restricting compatibility.</p>'}
+        ${unavailable?.length ? `<p class="text-xs text-amber-600">Missing profiles: ${escHtml(unavailable.join(', '))}</p>` : ''}`;
+      syncPresetBuildProfileChoices();
+    }
+
+    function syncPresetBuildProfileChoices(changed) {
+      const all = document.getElementById('preset-build-profiles-all');
+      const choices = [...document.querySelectorAll('.preset-build-profile-choice')];
+      if (!all) return;
+      if (changed && changed.id !== 'preset-build-profiles-all' && changed.checked) all.checked = false;
+      choices.forEach(choice => { choice.disabled = all.checked; });
+    }
+
+    function collectPresetBuildProfiles() {
+      const all = document.getElementById('preset-build-profiles-all');
+      if (!all || all.checked) return null;
+      const selected = [...document.querySelectorAll('.preset-build-profile-choice:checked')].map(choice => choice.value);
+      if (!selected.length) throw new Error('Select one or more compatible Build Profiles, or choose All Build Profiles.');
+      return selected;
+    }
+
     async function loadModelPresets() {
       try {
         const res = await fetch('/api/model-presets');
@@ -877,10 +1179,13 @@
       document.getElementById('preset-modal-title').innerText = index === null ? 'Add Serving Preset' : 'Edit Serving Preset';
       document.getElementById('preset-name').value = preset.name || suggestPresetName(initialModel);
       document.getElementById('preset-model').value = modelParam(preset) || initialModel;
+      document.getElementById('preset-mmproj').value = presetParam(preset, 'mmproj');
+      document.getElementById('preset-mtp').value = presetParam(preset, 'spec-draft-model', 'model-draft');
+      renderPresetBuildProfileChoices(preset.build_profiles);
       document.getElementById('preset-modal-status').innerText = '';
       const list = document.getElementById('preset-params-list');
       list.innerHTML = '';
-      (preset.params || []).filter(param => param.key !== 'model')
+      (preset.params || []).filter(param => !RESERVED_PRESET_KEYS.includes(param.key))
         .forEach(param => renderIniParamRow('preset-params-list', param.key, param.value));
       const modal = document.getElementById('preset-modal');
       modal.classList.remove('hidden');
@@ -937,6 +1242,16 @@
       const name = document.getElementById('preset-name').value.trim();
       const model = document.getElementById('preset-model').value.trim();
       const status = document.getElementById('preset-modal-status');
+      const mmproj = document.getElementById('preset-mmproj').value.trim();
+      const mtp = document.getElementById('preset-mtp').value.trim();
+      let buildProfiles;
+      try {
+        buildProfiles = collectPresetBuildProfiles();
+      } catch (e) {
+        status.innerText = e.message;
+        status.className = 'text-sm text-red-500 min-h-[1.25rem]';
+        return;
+      }
       if (!name || !model) {
         status.innerText = 'Preset name and model file are required.';
         status.className = 'text-sm text-red-500 min-h-[1.25rem]';
@@ -950,7 +1265,25 @@
         return;
       }
       const nextConfig = JSON.parse(JSON.stringify(presetConfig));
-      const preset = { name, params: [{ key: 'model', value: model }, ...collectIniParams('preset-params-list')] };
+      const params = collectIniParams('preset-params-list');
+      const reservedParam = params.find(param => RESERVED_PRESET_KEYS.includes(param.key));
+      if (reservedParam) {
+        status.innerText = `Use the dedicated field for ${reservedParam.key}.`;
+        status.className = 'text-sm text-red-500 min-h-[1.25rem]';
+        return;
+      }
+      const presetParams = [{ key: 'model', value: model }];
+      if (mmproj) presetParams.push({ key: 'mmproj', value: mmproj });
+      if (mtp) {
+        presetParams.push({ key: 'spec-draft-model', value: mtp });
+        const specType = params.find(param => param.key === 'spec-type');
+        if (!specType) {
+          params.unshift({ key: 'spec-type', value: 'draft-mtp' });
+        } else if (!specType.value.split(',').map(value => value.trim()).includes('draft-mtp')) {
+          specType.value = specType.value ? `${specType.value},draft-mtp` : 'draft-mtp';
+        }
+      }
+      const preset = { name, params: [...presetParams, ...params], build_profiles: buildProfiles };
       if (editingPresetIndex === null) nextConfig.presets.push(preset);
       else nextConfig.presets[editingPresetIndex] = preset;
       if (await persistModelPresets(nextConfig, status)) {
@@ -1048,15 +1381,21 @@
       }
     }
 
-    async function loadConfig() {
+    async function loadConfig(preferredProfileId = null) {
       try {
         const res = await fetch('/api/config');
         const data = await res.json();
-        document.getElementById('cmake-params').value = data.cmake_params || '';
-        document.getElementById('extra-packages').value = data.extra_packages || '';
+        buildConfig = data;
+        const requested = preferredProfileId || selectedBuildProfileId;
+        selectedBuildProfileId = (data.build_profiles || []).some(profile => profile.id === requested)
+          ? requested
+          : data.active_build_profile;
         renderCmakePresets(data.cmake_presets || []);
+        renderBuildProfileSelector();
+        renderModelPresets();
       } catch (e) {
         console.error('Failed to load config', e);
+        document.getElementById('build-status').innerText = 'Failed to load build profiles: ' + e;
       }
     }
 

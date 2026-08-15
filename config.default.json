@@ -1,6 +1,15 @@
 {
-  "cmake_params": "-DGGML_NATIVE=ON -DGGML_LTO=ON -DBUILD_SHARED_LIBS=OFF",
-  "extra_packages": "",
+  "active_build_profile": "main",
+  "build_profiles": [
+    {
+      "id": "main",
+      "name": "Main llama.cpp",
+      "repo_url": "https://github.com/ggml-org/llama.cpp.git",
+      "branch": "master",
+      "cmake_params": "-DGGML_NATIVE=ON -DGGML_LTO=ON -DBUILD_SHARED_LIBS=OFF",
+      "extra_packages": ""
+    }
+  ],
   "cmake_presets": [
     {
       "label": "CPU",
