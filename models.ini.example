@@ -10,6 +10,5 @@ temp = 1.0
 top-p = 0.95
 top-k = 40
 chat-template-kwargs = {"enable_thinking":false}
-mlock = true
-mmap = false
+load-mode = mlock
 jinja = true

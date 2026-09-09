@@ -7,7 +7,7 @@ import shlex
 import signal
 import subprocess
 import urllib.request
-from flask import Flask, render_template, request, jsonify, send_from_directory, Response, stream_with_context
+from flask import Flask, render_template, request, jsonify, send_from_directory, Response, stream_with_context, send_file
 
 class QuietPollingFilter(logging.Filter):
   """Filter out repetitive GET access logs for polling endpoints from Werkzeug logs."""
@@ -30,8 +30,20 @@ logging.getLogger('werkzeug').addFilter(QuietPollingFilter())
 
 # server.py lives in server/; the app root is one level up.
 APP_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+
+# Load .env file if it exists (no external dependencies)
+env_path = os.path.join(APP_ROOT, '.env')
+if os.path.isfile(env_path):
+  with open(env_path, 'r') as f:
+    for line in f:
+      line = line.strip()
+      if line and not line.startswith('#') and '=' in line:
+        k, v = line.split('=', 1)
+        os.environ.setdefault(k.strip(), v.strip())
+
 # Persistent data directory – the single volume mount point.
-DATA_DIR = os.path.join(APP_ROOT, 'data')
+DATA_DIR = os.environ.get('LLAMA_CONTROLLER_DATA_DIR', os.path.join(APP_ROOT, 'data'))
+DATA_DIR = os.path.abspath(os.path.expanduser(DATA_DIR))
 # Baked-in default config shipped inside the image.
 DEFAULT_CONFIG = os.path.join(APP_ROOT, 'config.default.json')
 DEFAULT_MODELS_PRESET = os.path.join(APP_ROOT, 'models.ini.example')
@@ -49,7 +61,8 @@ MODELS_DIR = os.path.join(DATA_DIR, 'models')
 LOG_FILE = '/tmp/llama.logs'
 BUILD_LOG_FILE = '/tmp/build.logs'
 ACTIVE_MODELS_PRESET_FILE = '/tmp/llama-active-models.ini'
-BUILD_PROFILES_DIR = os.path.join(APP_ROOT, 'build-profiles')
+BUILD_PROFILES_DIR = os.environ.get('LLAMA_CONTROLLER_BUILD_PROFILES_DIR', os.path.join(APP_ROOT, 'build-profiles'))
+BUILD_PROFILES_DIR = os.path.abspath(os.path.expanduser(BUILD_PROFILES_DIR))
 DEFAULT_LLAMA_REPO_URL = 'https://github.com/ggml-org/llama.cpp.git'
 PRESET_BUILD_PROFILE_COMMENT_PREFIX = '# llama-controller-build-profiles = '
 COMPANION_PARAM_KEYS = ('mmproj', 'spec-draft-model', 'model-draft')
@@ -393,11 +406,12 @@ def start_llama():
   except (OSError, ValueError) as e:
     return False, f'Could not prepare presets for active profile "{profile["name"]}": {e}'
 
+  server_port = os.environ.get("LLAMA_SERVER_PORT", "8080") if os.environ.get('NATIVE_RUN') else "8080"
   cmd = [
     server_bin,
     "--models-preset", ACTIVE_MODELS_PRESET_FILE,
     "--host", "0.0.0.0",
-    "--port", "8080",
+    "--port", server_port,
   ]
 
   log_file = open(LOG_FILE, 'w')
@@ -635,21 +649,24 @@ def build_llama():
     # and a conflicting origin must be resolved by creating a new profile.
     if os.path.exists(repo_path):
       if not os.path.isdir(os.path.join(repo_path, '.git')):
-        raise ValueError(
-          f'Profile checkout {repo_path} exists but is not a git repository; it was left untouched.'
+        if os.listdir(repo_path):
+          raise ValueError(
+            f'Profile checkout {repo_path} exists and is not empty, but is not a git repository; it was left untouched.'
+          )
+        # Empty directory: proceed to git clone
+      else:
+        origin_proc = subprocess.run(
+          ["git", "remote", "get-url", "origin"],
+          cwd=repo_path, capture_output=True, text=True
         )
-      origin_proc = subprocess.run(
-        ["git", "remote", "get-url", "origin"],
-        cwd=repo_path, capture_output=True, text=True
-      )
-      current_origin = origin_proc.stdout.strip()
-      if origin_proc.returncode != 0:
-        raise ValueError(f'Could not read the origin for profile "{profile["name"]}".')
-      if _normalize_git_url(current_origin) != _normalize_git_url(repo_url):
-        raise ValueError(
-          f'Profile "{profile["name"]}" already contains {current_origin}; '
-          'create a new profile for a different repository. The checkout was left untouched.'
-        )
+        current_origin = origin_proc.stdout.strip()
+        if origin_proc.returncode != 0:
+          raise ValueError(f'Could not read the origin for profile "{profile["name"]}".')
+        if _normalize_git_url(current_origin) != _normalize_git_url(repo_url):
+          raise ValueError(
+            f'Profile "{profile["name"]}" already contains {current_origin}; '
+            'create a new profile for a different repository. The checkout was left untouched.'
+          )
 
     with open(BUILD_LOG_FILE, 'w') as build_log:
       build_log.write(
@@ -660,7 +677,7 @@ def build_llama():
       build_log.flush()
       install_build_packages(profile, build_log)
 
-      if not os.path.exists(repo_path):
+      if not os.path.isdir(os.path.join(repo_path, '.git')):
         result = subprocess.run(
           ["git", "clone", repo_url, repo_path],
           stdout=build_log, stderr=subprocess.STDOUT, cwd=profile_root
@@ -875,6 +892,42 @@ def get_build_logs():
     lines = f.readlines()[-100:]
     return jsonify({"logs": "".join(lines)})
 
+@app.route('/api/logs/download')
+def download_logs():
+  if not os.path.exists(LOG_FILE):
+    resp = Response("", mimetype='text/plain', headers={
+      'Content-Disposition': 'attachment; filename="llama-server.log"'
+    })
+  else:
+    resp = send_file(
+      LOG_FILE,
+      mimetype='text/plain',
+      as_attachment=True,
+      download_name='llama-server.log'
+    )
+  resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+  resp.headers['Pragma'] = 'no-cache'
+  resp.headers['Expires'] = '0'
+  return resp
+
+@app.route('/api/build-logs/download')
+def download_build_logs():
+  if not os.path.exists(BUILD_LOG_FILE):
+    resp = Response("", mimetype='text/plain', headers={
+      'Content-Disposition': 'attachment; filename="llama-build.log"'
+    })
+  else:
+    resp = send_file(
+      BUILD_LOG_FILE,
+      mimetype='text/plain',
+      as_attachment=True,
+      download_name='llama-build.log'
+    )
+  resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+  resp.headers['Pragma'] = 'no-cache'
+  resp.headers['Expires'] = '0'
+  return resp
+
 def _shutdown(signum, frame):
   """Gracefully stop the child llama-server and exit when podman sends SIGTERM."""
   stop_llama()
@@ -888,4 +941,8 @@ if __name__ == '__main__':
   # Always start on docker start if binary exists
   start_llama()
   # Run the control web server
-  app.run(host='0.0.0.0', port=5000)
+  if os.environ.get('NATIVE_RUN'):
+    port = int(os.environ.get('LLAMA_CONTROLLER_PORT', 5000))
+  else:
+    port = 5000
+  app.run(host='0.0.0.0', port=port)

@@ -418,16 +418,37 @@
           class="bg-blue-600 text-white text-sm px-4 py-1.5 rounded hover:bg-blue-700 transition-colors">Save &amp; Build</button>
         <span id="build-status" class="text-xs text-gray-500 italic"></span>
       </div>
-      <p class="text-[11px] text-gray-400 mt-2">Deleting a profile removes only its configuration; its checkout remains under <code>build-profiles/</code>.</p>
+      <p class="text-[11px] text-gray-400 mt-2">Deleting a profile removes only its configuration; its checkout remains under <code>build-profiles/</code>. Building a profile always fetches the latest commits from the specified branch.</p>
     </div>
 
     <!-- Tabbed log panel -->
     <div class="bg-gray-900 p-6 rounded-lg shadow">
-      <div class="flex items-center gap-2 mb-4">
-        <button id="tab-server" onclick="switchTab('server')"
-          class="text-sm font-semibold px-3 py-1 rounded bg-gray-700 text-white">Server Logs</button>
-        <button id="tab-build" onclick="switchTab('build')"
-          class="text-sm font-semibold px-3 py-1 rounded text-gray-400 hover:text-white">Build Logs</button>
+      <div class="flex items-center justify-between gap-2 mb-4">
+        <div class="flex items-center gap-2">
+          <button id="tab-server" onclick="switchTab('server')"
+            class="text-sm font-semibold px-3 py-1 rounded bg-gray-700 text-white">Server Logs</button>
+          <button id="tab-build" onclick="switchTab('build')"
+            class="text-sm font-semibold px-3 py-1 rounded text-gray-400 hover:text-white">Build Logs</button>
+        </div>
+        <div class="flex items-center gap-1.5 sm:gap-2">
+          <button id="btn-copy-logs" onclick="copyCurrentLogs()" title="Copy server logs to clipboard"
+            class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs sm:text-sm font-medium text-gray-300 bg-gray-800 border border-gray-700 rounded hover:bg-gray-700 hover:text-white transition-colors">
+            <svg id="copy-logs-icon" class="w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+            <span id="btn-copy-logs-text">Copy</span>
+          </button>
+          <button id="btn-download-logs" onclick="downloadCurrentLogs()" title="Download server logs"
+            class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs sm:text-sm font-medium text-gray-300 bg-gray-800 border border-gray-700 rounded hover:bg-gray-700 hover:text-white transition-colors">
+            <svg class="w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            <span id="btn-download-logs-text">Download</span>
+          </button>
+        </div>
       </div>
       <pre id="logs-server" class="text-green-400 text-sm overflow-y-auto h-64 font-mono"></pre>
       <pre id="logs-build" class="text-yellow-300 text-sm overflow-y-auto h-64 font-mono hidden"></pre>
@@ -515,6 +536,82 @@
           log.classList.add('hidden');
         }
       });
+      const copyBtn = document.getElementById('btn-copy-logs');
+      const dlBtn = document.getElementById('btn-download-logs');
+      if (copyBtn) copyBtn.title = tab === 'build' ? 'Copy build logs to clipboard' : 'Copy server logs to clipboard';
+      if (dlBtn) dlBtn.title = tab === 'build' ? 'Download build logs' : 'Download server logs';
+    }
+
+    async function copyToClipboard(text) {
+      if (navigator.clipboard && window.isSecureContext) {
+        return navigator.clipboard.writeText(text);
+      }
+      const textArea = document.createElement('textarea');
+      textArea.value = text;
+      textArea.style.position = 'fixed';
+      textArea.style.left = '-999999px';
+      textArea.style.top = '-999999px';
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      return new Promise((resolve, reject) => {
+        try {
+          const successful = document.execCommand('copy');
+          textArea.remove();
+          if (successful) resolve();
+          else reject(new Error('Copy command failed'));
+        } catch (err) {
+          textArea.remove();
+          reject(err);
+        }
+      });
+    }
+
+    let copyLogsTimeout = null;
+    async function copyCurrentLogs() {
+      const activePre = document.getElementById(activeTab === 'build' ? 'logs-build' : 'logs-server');
+      const text = activePre ? activePre.innerText : '';
+      const btn = document.getElementById('btn-copy-logs');
+      const btnText = document.getElementById('btn-copy-logs-text');
+      const icon = document.getElementById('copy-logs-icon');
+
+      try {
+        await copyToClipboard(text);
+        if (copyLogsTimeout) clearTimeout(copyLogsTimeout);
+        if (btnText) btnText.innerText = 'Copied!';
+        if (btn) btn.classList.add('text-emerald-400', 'border-emerald-500');
+        if (icon) {
+          icon.innerHTML = '<polyline points="20 6 9 17 4 12"></polyline>';
+          icon.classList.remove('text-gray-400');
+          icon.classList.add('text-emerald-400');
+        }
+
+        copyLogsTimeout = setTimeout(() => {
+          if (btnText) btnText.innerText = 'Copy';
+          if (btn) btn.classList.remove('text-emerald-400', 'border-emerald-500');
+          if (icon) {
+            icon.innerHTML = '<rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>';
+            icon.classList.remove('text-emerald-400');
+            icon.classList.add('text-gray-400');
+          }
+        }, 2000);
+      } catch (err) {
+        console.error('Failed to copy logs:', err);
+        if (btnText) btnText.innerText = 'Failed';
+        setTimeout(() => { if (btnText) btnText.innerText = 'Copy'; }, 2000);
+      }
+    }
+
+    function downloadCurrentLogs() {
+      const isBuild = activeTab === 'build';
+      const endpoint = isBuild ? '/api/build-logs/download' : '/api/logs/download';
+      const filename = isBuild ? 'llama-build.log' : 'llama-server.log';
+      const a = document.createElement('a');
+      a.href = endpoint;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
     }
 
     function selectedBuildProfile() {

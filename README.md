@@ -80,7 +80,7 @@ Ternary models such as [`prism-ml/Ternary-Bonsai-27B-gguf`](https://huggingface.
 - **Decoupled Model Storage:** Downloads and uploads do not restart or change the models served by `llama-server`. Deletion restarts only when a preset or companion reference changes.
 - **Build Profiles:** Keep multiple independent `llama-server` source/build profiles, each with its own Git repository, branch, CMake flags, and apt packages. Select one active profile to run while preserving every other checkout and build.
 - **Build Templates:** Select CPU, BLAS, CUDA, ROCm, or Vulkan to fill both CMake flags and required apt packages for the current profile.
-- **Process Management:** Start, stop, and monitor the `llama-server` lifecycle. Logs stream in real-time.
+- **Process Management:** Start, stop, and monitor the `llama-server` lifecycle. Logs stream in real-time, with one-click options to copy to clipboard or download server and build logs.
 - **Rootless Podman Support:** Designed from the ground up to be compatible with rootless Podman containers.
 
 ## How It Works

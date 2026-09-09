@@ -159,7 +159,9 @@ All routes are defined in `server/server.py`. All API responses are JSON.
 | `POST` | `/api/model-presets/refresh` | Auto-add primary GGUF presets & remove stale presets | Excludes mmproj/MTP companions; writes models.ini and restarts if changed |
 | `POST` | `/api/build` | Build requested `profile_id` in its isolated checkout | Long-running, writes build logs; restarts only when building the active profile |
 | `GET` | `/api/logs` | Last 100 lines of server logs | — |
+| `GET` | `/api/logs/download` | Download full server log file (`llama-server.log`) | — |
 | `GET` | `/api/build-logs` | Last 100 lines of build logs | — |
+| `GET` | `/api/build-logs/download` | Download full build log file (`llama-build.log`) | — |
 | `GET` | `/api/llama-help` | `llama-server --help` output | — |
 
 ---
@@ -168,7 +170,7 @@ All routes are defined in `server/server.py`. All API responses are JSON.
 
 - **Single file:** `server/templates/index.html` — Jinja2 template with inline `<script>`.
 - **Styling:** Tailwind CSS via CDN (`<script src="https://cdn.tailwindcss.com">`). No build step.
-- **Polling:** Status is polled every 3s; logs every 2s; model files and presets every 10s via `setInterval` + `fetch`.
+- **Polling:** Status is polled every 3s; logs every 2s; model files and presets every 10s via `setInterval` + `fetch`. The tabbed log panel provides one-click copy to clipboard and log file downloading for both server and build logs.
 - **Preset UI:** Serving presets are listed in their own panel. Add/edit uses a modal with primary model, optional mmproj, optional MTP, and compatible Build Profile selections; global `[*]` parameters use a separate modal. The list identifies whether each preset is served by the active profile. Primary and companion availability is indicated with tooltip icons and badges.
 - **Build Profile UI:** The Build Profiles panel creates, duplicates, edits, deletes, activates, and builds profiles. Deleting configuration deliberately leaves the checkout on disk. Hardware templates populate the selected profile only.
 - **Template variables:** `{{ version }}` and `{{ llama_server_url }}` are injected by Flask.

@@ -60,7 +60,7 @@ Treat these as starting points: adjust one variable at a time and use the built-
 
 ## Features
 
-- 🚀 **Zero-Bloat UI:** Single-page frontend using vanilla JS and Tailwind CSS via CDN paired with a lightweight Flask backend. No Node.js, Webpack, or database dependencies.
+- 🚀 **Zero-Bloat UI:** Single-page frontend using vanilla JS and Tailwind CSS via CDN paired with a lightweight Flask backend. Real-time log monitoring with one-click copy to clipboard and log file download. No Node.js, Webpack, or database dependencies.
 - 🛠️ **Independent Build Profiles:** Keep multiple repository, branch, CMake, and package configurations with separate persistent source/build trees. Activate one profile to run while preserving the others. CPU, OpenBLAS, CUDA, ROCm, and Vulkan templates fill common settings.
 - 📦 **Hugging Face Downloader:** Search and download GGUF models directly from Hugging Face with real-time SSE progress streaming.
 - ⚙️ **Compatible Model Presets:** Add, edit, duplicate, and refresh serving presets stored in `data/models.ini`. Assign each preset to one or more Build Profiles so the active `llama-server` receives only models its build supports. Define inherited global parameters (`[*]`) and per-model flags (`n-gpu-layers`, `ctx-size`, `temp`, etc.).

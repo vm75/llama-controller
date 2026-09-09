@@ -2,7 +2,7 @@
 IMAGE_NAME = vm75/llama-controller
 LLAMA_CONTROLLER_PORT ?= 5000
 
-.PHONY: all build run test stop clean logs
+.PHONY: all build run run-native test stop clean logs
 
 # Default target
 all: build run
@@ -17,6 +17,18 @@ run:
 	@echo "Starting services with podman compose..."
 	podman compose up -d
 	@echo "Services started! Access the UI at http://localhost:$(LLAMA_CONTROLLER_PORT)"
+
+# Run the server natively without a container
+run-native:
+	@echo "Running server natively..."
+	@if [ ! -d "venv" ]; then \
+		echo "Creating virtual environment..."; \
+		python3 -m venv venv; \
+	fi
+	@echo "Installing dependencies..."
+	@./venv/bin/pip install -q -r server/requirements.txt
+	@echo "Starting Flask server natively..."
+	@NATIVE_RUN=1 ./venv/bin/python server/server.py
 
 # Test if the Web UI is responding
 test:
