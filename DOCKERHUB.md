@@ -11,6 +11,12 @@
 
 A lightweight, containerized control plane for [`llama.cpp`](https://github.com/ggml-org/llama.cpp). `llama-controller` provides a clean single-page interface to compile `llama.cpp` from source, download and manage GGUF models, configure native `models.ini` serving presets, and control the `llama-server` inference process lifecycle.
 
+## Unreleased development changes
+
+HF repository inspection and multi-file downloads, an editable Llama UI link, and the `Containerfile`/`compose.yml` naming migration are unreleased changes. The version remains 0.6.0.
+
+Downloads honor explicit file URLs and require complete shard selections. Selected files are downloaded afresh into `.part` files and atomically replaced after size validation; interrupted files restart from the beginning on retry. This avoids reusing equal-sized weights from another revision. Failed requests restore the download controls. Recursive model listing and preset refresh skip symlinks whose targets are outside the model directory.
+
 ---
 
 ## Why Llama Controller
@@ -66,6 +72,7 @@ Treat these as starting points: adjust one variable at a time and use the built-
 - ⚙️ **Compatible Model Presets:** Add, edit, duplicate, and refresh serving presets stored in `data/models.ini`. Assign each preset to one or more Build Profiles so the active `llama-server` receives only models its build supports. Define inherited global parameters (`[*]`) and per-model flags (`n-gpu-layers`, `ctx-size`, `temp`, etc.).
 - 👁️ **Multimodal and MTP Companions:** Upload or download `mmproj-*.gguf` projectors and `mtp-*.gguf` draft files, then attach them through dedicated preset fields. MTP selection configures `spec-draft-model` and `draft-mtp` automatically.
 - 🔄 **Decoupled Storage Lifecycle:** Primary downloads/uploads open a prefilled preset modal without changing the active server; companions remain stored until attached. Server restarts occur only when model presets or their file references change.
+- 🔗 **Configurable Llama UI Link:** Set the destination of the running-server **Llama UI** button from the web UI; the value is persisted in `data/config.json`.
 - 🔒 **Rootless Podman Ready:** Purpose-built to run as a non-root user (`llama`) with full rootless Podman and Docker support.
 
 ---
@@ -94,9 +101,9 @@ docker run -d \
 >   vm75/llama-controller:latest
 > ```
 
-### Option 2: Docker Compose / Podman Compose
+### Option 2: Compose
 
-Create a `docker-compose.yml` file:
+Create a `compose.yml` file:
 
 ```yaml
 services:
@@ -121,8 +128,7 @@ services:
 Run:
 ```bash
 docker compose up -d
-# or with Podman
-podman-compose up -d
+# or: podman compose up -d
 ```
 
 Once running, access:
@@ -138,6 +144,8 @@ Once running, access:
 | `LLAMA_CONTROLLER_PORT` | `5000` | Port for the control plane web UI |
 | `LLAMA_SERVER_PORT` | `8080` | Port for the `llama-server` OpenAI-compatible API |
 | `LLAMA_SERVER_URL` | `http://localhost:8080` | Public URL link to `llama-server` displayed in the UI |
+
+The **Llama UI Link** setting in the web UI controls the URL opened by the **Llama UI** button. It defaults to `http://localhost:8080` and is persisted in `data/config.json`. `LLAMA_SERVER_URL` remains an initial fallback for existing configurations that do not yet contain the setting.
 
 ---
 
@@ -157,6 +165,7 @@ build-profiles/      # Optional mount: separate source/build tree per profile
 - **Build Profiles:** Repository URL, branch, CMake flags, and packages are saved in `data/config.json`; checkouts and binaries live under `build-profiles/<profile-id>/llama.cpp/`. Mount `./build-profiles:/home/llama/app/build-profiles:Z` to persist them across container recreation, or leave it unmounted for ephemeral build trees. Each serving preset can be assigned to compatible profiles; the active server gets a filtered router file containing only matching presets. Deleting a profile leaves its checkout on disk.
 - **GGUF Files:** Downloaded or uploaded primary models, multimodal projectors, and MTP draft files are stored under `data/models/`.
 - **Companions:** Filenames beginning with `mmproj` or `mtp` are labeled as companions and excluded from automatic standalone presets. Attach them while adding or editing the primary model's serving preset.
+- **Hugging Face downloads:** The Download HF dialog accepts repository/quantifier specifiers such as `owner/repo:Q4_K_M` and Hugging Face blob/resolve URLs. Inspect the repository first, select complete model shards and optional mmproj/MTP companions, and download them into repository-scoped paths under `data/models/`. Transfers stream aggregate SSE progress and do not restart the server.
 - **Large Files (>2 GB):** Copy `.gguf` files directly into `./data/models/` on the host, then click **Refresh Presets** in the UI to create presets for unassigned primary models. Companion files remain available for manual attachment.
 - **Deletion:** Removing a primary model deletes its serving presets; removing a referenced companion only detaches it. The server restarts only when preset configuration changes.
 

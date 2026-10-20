@@ -158,46 +158,14 @@
           <button onclick="closeHfModal()" class="text-gray-400 hover:text-red-500 text-xl leading-none">×</button>
         </div>
 
-        <!-- Mode selector -->
-        <div class="flex rounded border border-gray-200 overflow-hidden mb-4 text-sm">
-          <label
-            class="flex-1 flex items-center justify-center gap-1.5 py-1.5 cursor-pointer bg-blue-50 border-r border-gray-200">
-            <input type="radio" name="hf-mode" id="hf-mode-repo" value="repo" checked onchange="hfSwitchMode()"
-              class="accent-blue-600">
-            <span>Repo + Filename</span>
-          </label>
-          <label class="flex-1 flex items-center justify-center gap-1.5 py-1.5 cursor-pointer">
-            <input type="radio" name="hf-mode" id="hf-mode-url" value="url" onchange="hfSwitchMode()"
-              class="accent-blue-600">
-            <span>URL</span>
-          </label>
-        </div>
-
-        <!-- Repo + Filename panel -->
-        <div id="hf-panel-repo" class="space-y-3">
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Repository <span
-                class="text-gray-400 font-normal">(e.g.
-                <code>bartowski/Llama-3.2-1B-Instruct-GGUF</code>)</span></label>
-            <input id="hf-repo" type="text" placeholder="owner/repo"
-              class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        <div class="space-y-3">
+          <label class="block text-sm font-medium text-gray-700 mb-1">Repository, quantifier, or Hugging Face file URL</label>
+          <div class="flex gap-2">
+            <input id="hf-source" type="text" placeholder="owner/repo:Q4_K_M or https://huggingface.co/.../model.gguf"
+              class="flex-1 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+            <button id="hf-inspect-btn" onclick="inspectHf()" class="px-3 py-1.5 text-sm rounded border border-blue-300 text-blue-700 hover:bg-blue-50">Inspect</button>
           </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Filename <span
-                class="text-gray-400 font-normal">(.gguf)</span></label>
-            <input id="hf-filename" type="text" placeholder="model.Q4_K_M.gguf"
-              class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
-          </div>
-        </div>
-
-        <!-- URL panel (hidden by default) -->
-        <div id="hf-panel-url" class="hidden space-y-3">
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Hugging Face URL <span
-                class="text-gray-400 font-normal">(blob or resolve link)</span></label>
-            <input id="hf-url" type="text" placeholder="https://huggingface.co/owner/repo/blob/main/model.gguf"
-              class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
-          </div>
+          <div id="hf-manifest" class="hidden max-h-56 overflow-y-auto rounded border border-gray-200 bg-gray-50 p-3 text-sm"></div>
         </div>
 
         <!-- Progress block (hidden until download starts) -->
@@ -216,8 +184,8 @@
         <div class="flex justify-end gap-2 mt-4">
           <button onclick="closeHfModal()"
             class="px-4 py-1.5 text-sm rounded border border-gray-300 hover:bg-gray-100">Cancel</button>
-          <button id="hf-download-btn" onclick="downloadFromHf()"
-            class="bg-blue-600 text-white px-4 py-1.5 text-sm rounded hover:bg-blue-700">Download</button>
+          <button id="hf-download-btn" onclick="downloadFromHf()" disabled
+            class="bg-blue-600 text-white px-4 py-1.5 text-sm rounded hover:bg-blue-700 disabled:opacity-50">Download selected</button>
         </div>
       </div>
     </div>
@@ -419,6 +387,20 @@
         <span id="build-status" class="text-xs text-gray-500 italic"></span>
       </div>
       <p class="text-[11px] text-gray-400 mt-2">Deleting a profile removes only its configuration; its checkout remains under <code>build-profiles/</code>. Building a profile always fetches the latest commits from the specified branch.</p>
+    </div>
+
+    <!-- UI settings panel -->
+    <div class="bg-white p-6 rounded-lg shadow">
+      <h2 class="text-xl font-semibold mb-1">Llama UI Link</h2>
+      <p class="text-xs text-gray-400 mb-3">Set the URL opened by the <span class="font-medium">Llama UI</span> button when the server is running.</p>
+      <div class="flex flex-col sm:flex-row gap-2">
+        <input id="llama-server-url" type="url" spellcheck="false"
+          placeholder="http://localhost:8080"
+          class="flex-1 rounded border border-gray-300 px-3 py-1.5 text-sm font-mono text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-300">
+        <button id="btn-save-server-url" type="button" onclick="saveServerUrl()"
+          class="bg-blue-600 text-white text-sm px-4 py-1.5 rounded hover:bg-blue-700 transition-colors">Save URL</button>
+      </div>
+      <p id="server-url-status" class="text-xs text-gray-500 min-h-[1rem] mt-2"></p>
     </div>
 
     <!-- Tabbed log panel -->
@@ -871,91 +853,64 @@
     }
 
     function openHfModal() {
-      document.getElementById('hf-mode-repo').checked = true;
-      document.getElementById('hf-repo').value = '';
-      document.getElementById('hf-filename').value = '';
-      document.getElementById('hf-url').value = '';
+      hfManifest = null;
+      document.getElementById('hf-source').value = '';
       document.getElementById('hf-status').innerText = '';
-      document.getElementById('hf-download-btn').disabled = false;
+      document.getElementById('hf-download-btn').disabled = true;
+      document.getElementById('hf-manifest').classList.add('hidden');
+      document.getElementById('hf-manifest').innerHTML = '';
       document.getElementById('hf-progress-block').classList.add('hidden');
       document.getElementById('hf-progress-bar').style.width = '0%';
       document.getElementById('hf-progress-bar').classList.remove('animate-pulse');
-      hfSwitchMode();
       document.getElementById('hf-modal').classList.remove('hidden');
-      document.getElementById('hf-repo').focus();
+      document.getElementById('hf-source').focus();
     }
 
     function closeHfModal() {
       document.getElementById('hf-modal').classList.add('hidden');
     }
 
-    function hfSwitchMode() {
-      const isUrl = document.getElementById('hf-mode-url').checked;
-      document.getElementById('hf-panel-repo').classList.toggle('hidden', isUrl);
-      document.getElementById('hf-panel-url').classList.toggle('hidden', !isUrl);
-      document.getElementById('hf-status').innerText = '';
-      setTimeout(() => {
-        if (isUrl) document.getElementById('hf-url').focus();
-        else document.getElementById('hf-repo').focus();
-      }, 0);
-    }
+    let hfManifest = null;
 
-    function hfParseUrl(rawUrl) {
-      // Accepts blob or resolve URLs:
-      // https://huggingface.co/owner/repo/blob/main/filename.gguf
-      // https://huggingface.co/owner/repo/resolve/main/filename.gguf
+    async function inspectHf() {
+      const statusEl = document.getElementById('hf-status');
+      const source = document.getElementById('hf-source').value.trim();
+      if (!source) { statusEl.innerText = 'Enter a repository, quantifier, or file URL.'; return; }
+      const button = document.getElementById('hf-inspect-btn');
+      button.disabled = true;
       try {
-        const url = new URL(rawUrl);
-        if (url.hostname !== 'huggingface.co') return null;
-        const parts = url.pathname.split('/').filter(Boolean);
-        // parts[0]=owner, parts[1]=repo, parts[2]=blob|resolve, parts[3]=branch, parts[4..]=filename
-        const sepIdx = parts.findIndex(p => p === 'blob' || p === 'resolve');
-        if (sepIdx < 1 || parts.length <= sepIdx + 2) return null;
-        const repo = parts.slice(0, sepIdx).join('/');
-        const filename = parts.slice(sepIdx + 2).join('/');
-        return { repo, filename };
-      } catch { return null; }
+        const res = await fetch('/api/hf/resolve', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({source}) });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Inspection failed');
+        hfManifest = data;
+        const groups = (data.model_groups || []).map((group, index) => `<label class="block py-1"><input type="checkbox" class="hf-choice mr-2" data-paths='${escHtml(JSON.stringify(group.files.map(file => file.path)))}' data-role="model" ${!group.complete ? 'disabled' : group.selected ? 'checked' : ''}>Model: ${escHtml(group.id)} (${group.files.length} file${group.files.length === 1 ? '' : 's'}${group.complete ? '' : ', incomplete — unavailable'})</label>`).join('');
+        const companions = (data.companions || []).map(item => `<label class="block py-1"><input type="checkbox" class="hf-choice mr-2" data-paths='${escHtml(JSON.stringify([item.path]))}' data-role="${item.role}" ${item.recommended ? 'checked' : ''}>${escHtml(item.role)}: ${escHtml(item.path)} (${formatSize(item.size)})</label>`).join('');
+        document.getElementById('hf-manifest').innerHTML = `<div class="font-medium mb-1">${escHtml(data.repo)}${data.quantifier ? ':' + escHtml(data.quantifier) : ''}</div>${groups || '<div class="text-amber-600">No unambiguous model group selected.</div>'}${companions ? '<div class="font-medium mt-2">Companions</div>' + companions : ''}`;
+        document.getElementById('hf-manifest').classList.remove('hidden');
+        document.getElementById('hf-download-btn').disabled = !document.querySelector('.hf-choice:checked');
+        document.querySelectorAll('.hf-choice').forEach(choice => choice.addEventListener('change', () => document.getElementById('hf-download-btn').disabled = !document.querySelector('.hf-choice:checked')));
+        statusEl.innerText = 'Select the files to download.';
+      } catch (e) { statusEl.innerText = e.message; statusEl.className = 'text-sm text-red-500 min-h-[1.25rem] mt-2'; }
+      button.disabled = false;
     }
 
     async function downloadFromHf() {
       const statusEl = document.getElementById('hf-status');
       const btn = document.getElementById('hf-download-btn');
-      const cancelBtn = document.querySelector('#hf-modal button[onclick="closeHfModal()"]');
-      const modeRadios = document.querySelectorAll('#hf-modal input[type=radio]');
       const progressBlock = document.getElementById('hf-progress-block');
       const progressBar = document.getElementById('hf-progress-bar');
       const progressPct = document.getElementById('hf-progress-pct');
       const progressSize = document.getElementById('hf-progress-size');
       const progressLabel = document.getElementById('hf-progress-label');
-      const isUrl = document.getElementById('hf-mode-url').checked;
-
-      let repo, filename;
-      if (isUrl) {
-        const raw = document.getElementById('hf-url').value.trim();
-        const parsed = hfParseUrl(raw);
-        if (!parsed) {
-          statusEl.innerText = 'Invalid Hugging Face URL. Expected: https://huggingface.co/owner/repo/blob/main/file.gguf';
-          statusEl.className = 'text-sm text-red-500 min-h-[1.25rem]';
-          return;
-        }
-        ({ repo, filename } = parsed);
-      } else {
-        repo = document.getElementById('hf-repo').value.trim();
-        filename = document.getElementById('hf-filename').value.trim();
-        if (!repo || !filename) {
-          statusEl.innerText = 'Please fill in both fields.';
-          statusEl.className = 'text-sm text-red-500 min-h-[1.25rem]';
-          return;
-        }
-      }
+      if (!hfManifest) { await inspectHf(); if (!hfManifest) return; }
+      const choices = [...document.querySelectorAll('.hf-choice:checked')];
+      const files = choices.flatMap(choice => JSON.parse(choice.dataset.paths).map(path => ({path, role: choice.dataset.role})));
+      if (!files.length) { statusEl.innerText = 'Select at least one file.'; return; }
 
       // Lock inputs, show progress block
       btn.disabled = true;
-      if (cancelBtn) cancelBtn.disabled = true;
-      modeRadios.forEach(r => r.disabled = true);
-      document.getElementById('hf-repo').disabled = true;
-      document.getElementById('hf-filename').disabled = true;
-      document.getElementById('hf-url').disabled = true;
+      document.getElementById('hf-source').disabled = true;
+      document.getElementById('hf-inspect-btn').disabled = true;
       statusEl.innerText = '';
       statusEl.className = 'text-sm min-h-[1.25rem] mt-2';
       progressBlock.classList.remove('hidden');
@@ -966,20 +921,22 @@
 
       function unlockModal() {
         btn.disabled = false;
-        if (cancelBtn) cancelBtn.disabled = false;
-        modeRadios.forEach(r => r.disabled = false);
-        document.getElementById('hf-repo').disabled = false;
-        document.getElementById('hf-filename').disabled = false;
-        document.getElementById('hf-url').disabled = false;
+        document.getElementById('hf-source').disabled = false;
+        document.getElementById('hf-inspect-btn').disabled = false;
       }
 
       try {
         const res = await fetch('/api/download', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ repo, filename })
+          body: JSON.stringify({ repo: hfManifest.repo, revision: hfManifest.revision, files })
         });
+        if (!res.ok) {
+          const error = await res.json();
+          throw new Error(error.message || 'Download failed');
+        }
         const reader = res.body.getReader();
+        let finished = false;
         const decoder = new TextDecoder();
         let buf = '';
         while (true) {
@@ -993,15 +950,18 @@
             buf = buf.slice(boundary + 2);
             if (!line.startsWith('data: ')) continue;
             const ev = JSON.parse(line.slice(6));
-            if (ev.success !== undefined) {
-              // Final event
+            if (ev.event === 'complete' || ev.event === 'error') {
+              finished = true;
               progressBlock.classList.add('hidden');
               if (ev.success) {
                 statusEl.innerText = ev.message;
                 statusEl.className = 'text-sm text-green-600 min-h-[1.25rem] mt-2';
                 await loadModels();
                 await loadModelPresets();
-                finishStoredFile(ev, closeHfModal);
+                const modelChoice = [...document.querySelectorAll('.hf-choice')].find(item => item.checked && item.dataset.role === 'model');
+                const downloadedModel = modelChoice ? JSON.parse(modelChoice.dataset.paths)[0] : null;
+                closeHfModal();
+                if (downloadedModel) openPresetModal(null, 'data/models/' + hfManifest.repo + '/' + downloadedModel);
                 unlockModal();
               } else {
                 statusEl.innerText = ev.message;
@@ -1010,11 +970,11 @@
               }
             } else {
               // Progress event
-              const { progress, downloaded, total } = ev;
-              progressLabel.innerText = 'Downloading…';
+              const downloaded = ev.downloaded || 0, total = ev.total || 0;
+              progressLabel.innerText = ev.path ? `Downloading ${ev.path}…` : 'Preparing…';
               if (total > 0) {
-                progressBar.style.width = progress + '%';
-                progressPct.innerText = progress + '%';
+                progressBar.style.width = Math.min(100, Math.round(downloaded * 100 / total)) + '%';
+                progressPct.innerText = Math.min(100, Math.round(downloaded * 100 / total)) + '%';
                 progressSize.innerText = formatSize(downloaded) + ' / ' + formatSize(total);
               } else {
                 // No Content-Length — indeterminate; animate bar
@@ -1025,10 +985,12 @@
             }
           }
         }
+        if (!finished) throw new Error('Download stream ended before completion.');
       } catch (e) {
         progressBlock.classList.add('hidden');
         statusEl.innerText = 'Request failed: ' + e;
         statusEl.className = 'text-sm text-red-500 min-h-[1.25rem] mt-2';
+      } finally {
         unlockModal();
       }
     }
@@ -1061,6 +1023,7 @@
               </div>
               <div class="flex items-center gap-3 shrink-0">
                 <span class="text-xs text-gray-400">${formatSize(m.size)}</span>
+                ${m.reference_count ? `<span class="text-[10px] text-indigo-600" title="${escHtml((m.referencing_presets || []).join(', '))}">${m.reference_count} preset${m.reference_count === 1 ? '' : 's'}</span>` : ''}
                 <button onclick="deleteModel(decodeURIComponent('${encodeURIComponent(m.name).replace(/'/g, '%27')}'), '${escHtml(m.kind)}')"
                   class="text-gray-300 hover:text-red-500 transition-colors" title="Delete file">
                   <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1487,12 +1450,39 @@
         selectedBuildProfileId = (data.build_profiles || []).some(profile => profile.id === requested)
           ? requested
           : data.active_build_profile;
+        document.getElementById('llama-server-url').value = data.llama_server_url || '';
         renderCmakePresets(data.cmake_presets || []);
         renderBuildProfileSelector();
         renderModelPresets();
       } catch (e) {
         console.error('Failed to load config', e);
         document.getElementById('build-status').innerText = 'Failed to load build profiles: ' + e;
+      }
+    }
+
+    async function saveServerUrl() {
+      const btn = document.getElementById('btn-save-server-url');
+      const status = document.getElementById('server-url-status');
+      const url = document.getElementById('llama-server-url').value.trim();
+      btn.disabled = true;
+      status.innerText = 'Saving…';
+      status.className = 'text-xs text-gray-500 min-h-[1rem] mt-2';
+      try {
+        const res = await fetch('/api/server-url', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ llama_server_url: url })
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.message || 'Could not save URL.');
+        document.getElementById('server-link').href = data.llama_server_url;
+        status.innerText = data.message;
+        status.className = 'text-xs text-green-600 min-h-[1rem] mt-2';
+      } catch (e) {
+        status.innerText = e.message;
+        status.className = 'text-xs text-red-500 min-h-[1rem] mt-2';
+      } finally {
+        btn.disabled = false;
       }
     }
 

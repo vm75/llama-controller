@@ -6,6 +6,14 @@ A lightweight, containerized control plane for `llama.cpp`. Flask backend + vani
 
 Llama Controller provides a low-overhead way to operate native `llama.cpp` on hardware-constrained local systems. Its value is making the engine's build and serving controls easy to iterate on: users can preserve per-model `llama-server` flags (for example, context size, GPU offload, cache quantization, parallelism, and speculative decoding), rebuild for a chosen hardware backend, and manage model availability without manually editing files or supervising processes. The application intentionally remains a control plane rather than an inference layer, so `llama-server` retains responsibility for model routing and execution. Public documentation should explain this with cautious, native `models.ini` examples: `n-cpu-moe` can place MoE expert weights for the first N layers in CPU RAM, while `cache-type-k` and `cache-type-v` quantize KV-cache storage to free memory for context or model layers. These are workload-dependent tradeoffs, not guarantees of faster inference or additional physical VRAM. Custom forks (such as `https://github.com/PrismML-Eng/llama.cpp.git` for 1.7-bit ternary models like `prism-ml/Ternary-Bonsai-27B-gguf`) are managed as independent Build Profiles in the UI, keeping the upstream checkout and build intact.
 
+## Current release: 0.6.0
+
+## Unreleased development changes
+
+HF repository inspection and multi-file downloads, an editable Llama UI link, and the `Containerfile`/`compose.yml` naming migration are unreleased changes. The version remains 0.6.0.
+
+Downloads honor explicit file URLs and require complete shard selections. Selected files are downloaded afresh into `.part` files and atomically replaced after size validation; interrupted files restart from the beginning on retry. This avoids reusing equal-sized weights from another revision. Failed requests restore the download controls. Recursive model listing and preset refresh skip symlinks whose targets are outside the model directory.
+
 ## Core Principles: YAGNI & KISS
 
 ### KISS (Keep It Simple, Stupid)
@@ -35,10 +43,10 @@ llama-controller/
 │       └── index.html             # Single-page UI (Jinja2 + Tailwind CDN + vanilla JS)
 ├── config.default.json            # Default config — seeded into data/config.json on first run
 ├── models.ini.example             # Default global model parameters — seeded into data/models.ini
-├── Dockerfile                     # Debian bookworm-slim, non-root `llama` user, venv
-├── docker-compose.yml.example     # Sample compose file (users copy to docker-compose.yml)
+├── Containerfile                  # Debian bookworm-slim, non-root `llama` user, venv
+├── compose.yml.example            # Vendor-neutral Compose file (users copy to compose.yml)
 ├── .env.example                   # Documented port variables
-├── Makefile                       # Podman workflow shortcuts (build, run, test, stop, etc.)
+├── Makefile                       # Configurable container workflow shortcuts
 ├── VERSION                        # Semver string (e.g. "0.1.0"), read by server.py at startup
 ├── LICENSE                        # MIT
 └── AGENTS.md                      # This file
@@ -52,8 +60,8 @@ data/                              # Persistent volume mount point
 └── models/                        # Primary, mmproj, and MTP GGUF files
 build-profiles/                    # Optional profile source/build mount
 └── <profile-id>/llama.cpp/        # One checkout and binary per Build Profile
-venv/                              # Python virtual environment (created by Dockerfile)
-docker-compose.yml                 # User's local compose (copied from .example)
+venv/                              # Python virtual environment (created by Containerfile)
+compose.yml                        # User's local Compose file (copied from .example)
 .env                               # User's local port overrides
 ```
 
@@ -110,7 +118,7 @@ docker-compose.yml                 # User's local compose (copied from .example)
     { "label": "AMD ROCm",     "flags": "-DGGML_HIPBLAS=ON ...", "extra_packages": "hipcc" },
     { "label": "Vulkan",       "flags": "-DGGML_VULKAN=ON ...", "extra_packages": "libvulkan-dev" }
   ],
-  "llama_server_url": "http://localhost:8080"
+  "llama_server_url": "http://localhost:8080"    // URL opened by the Llama UI link when server is running
 }
 ```
 
@@ -150,9 +158,10 @@ All routes are defined in `server/server.py`. All API responses are JSON.
 | `GET` | `/api/config` | Return full config.json | — |
 | `POST` | `/api/config` | Validate and save Build Profiles/UI config | Writes config.json; changing active profile restarts with its binary when available |
 | `POST` | `/api/server-url` | Update the `llama_server_url` field | Writes config.json (no restart) |
-| `GET` | `/api/models` | List GGUF files with sizes and model/mmproj/MTP kinds | — |
+| `GET` | `/api/models` | Recursively list GGUF files with relative paths, sizes, roles, and preset references | — |
 | `POST` | `/api/upload` | Upload a GGUF file | Saves to models/; primary files open a preset modal, companions do not (no restart) |
-| `POST` | `/api/download` | Download a GGUF file from HF | Saves to models/ via SSE; primary files open a preset modal, companions do not (no restart) |
+| `POST` | `/api/hf/resolve` | Inspect a Hugging Face repository/specifier and recommend models/companions | Reads HF tree; no files or restart |
+| `POST` | `/api/download` | Download one or more validated GGUF files from HF | Repository-scoped `.part`/atomic files via SSE; no restart |
 | `DELETE` | `/api/models/<filename>` | Delete a model or companion file | Removes primary presets or companion references; restarts only if presets changed |
 | `GET` | `/api/model-presets` | Return global parameters, serving presets, compatibility assignments, and active-profile availability | Reads models.ini |
 | `PUT` | `/api/model-presets` | Replace global parameters, presets, and compatibility assignments | Writes models.ini, regenerates active router file, restarts process if built |
@@ -174,6 +183,7 @@ All routes are defined in `server/server.py`. All API responses are JSON.
 - **Preset UI:** Serving presets are listed in their own panel. Add/edit uses a modal with primary model, optional mmproj, optional MTP, and compatible Build Profile selections; global `[*]` parameters use a separate modal. The list identifies whether each preset is served by the active profile. Primary and companion availability is indicated with tooltip icons and badges.
 - **Build Profile UI:** The Build Profiles panel creates, duplicates, edits, deletes, activates, and builds profiles. Deleting configuration deliberately leaves the checkout on disk. Hardware templates populate the selected profile only.
 - **Template variables:** `{{ version }}` and `{{ llama_server_url }}` are injected by Flask.
+- **UI settings:** The Llama UI link URL is editable in the UI and persisted through `POST /api/server-url`.
 - **No frameworks:** Vanilla JS only. DOM manipulation via `getElementById` / `innerHTML`.
 
 ---
@@ -198,8 +208,12 @@ All routes are defined in `server/server.py`. All API responses are JSON.
 ## Maintenance Directives
 
 * **File Modifications:** Keep changes strictly scoped to the user's request.
-* **Podman Compatibility:** Ensure all Dockerfile and compose changes remain compatible with rootless Podman (e.g., preserving `userns_mode: keep-id` and `:Z` volume mounts).
+* **Container Compatibility:** Keep Containerfile and Compose changes compatible with Docker and rootless Podman (including `userns_mode: keep-id` and `:Z` volume mounts where supported).
 * **Build Profiles:** Never delete, repoint, or reuse another profile’s checkout when adding or building a repository. Profile trees live outside `data/` under `build-profiles/`; mount that directory optionally for persistence, analogous to `venv/`. The active profile alone controls startup and restarts; inactive profiles remain independently buildable. Presets may be assigned to one or more compatible profile IDs, and only those assigned to the active profile are passed to `llama-server`.
 * **Model Handling:** GGUF files >2GB are typically volume-mounted by the user or downloaded directly from Hugging Face via the web UI (which supports SSE streaming). Primary upload/download opens a prefilled preset modal without changing the server. `mmproj-*` and `mtp-*` companions are attached to an existing preset. Deleting a primary removes matching presets; deleting a companion detaches matching `mmproj`, `spec-draft-model`, or legacy `model-draft` references. Restart only when preset configuration changed.
 * **Signal Handling:** `server.py` traps `SIGTERM`/`SIGINT` to gracefully stop the child `llama-server` process before exiting.
 * **Documentation:** Whenever features are added, modified, or removed, you MUST update both `README.md`, `DOCKERHUB.md` and `AGENTS.md` to capture these changes (e.g. updating API route tables, feature lists, or system architecture).
+
+## Regression checks
+
+Run `python -m unittest discover -s tests -v` with the dependencies in `server/requirements.txt` installed. The HF tests use temporary model storage and mocked HF responses. The optional `node tests/hf-ui.cjs` check exercises download error handling without browser packages or a frontend build step.

@@ -10,6 +10,7 @@
       "extra_packages": ""
     }
   ],
+  "llama_server_url": "http://localhost:8080",
   "cmake_presets": [
     {
       "label": "CPU",

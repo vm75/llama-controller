@@ -7,6 +7,8 @@ import shlex
 import signal
 import subprocess
 import urllib.request
+import urllib.error
+from urllib.parse import urlparse, quote
 from flask import Flask, render_template, request, jsonify, send_from_directory, Response, stream_with_context, send_file
 
 class QuietPollingFilter(logging.Filter):
@@ -66,6 +68,127 @@ BUILD_PROFILES_DIR = os.path.abspath(os.path.expanduser(BUILD_PROFILES_DIR))
 DEFAULT_LLAMA_REPO_URL = 'https://github.com/ggml-org/llama.cpp.git'
 PRESET_BUILD_PROFILE_COMMENT_PREFIX = '# llama-controller-build-profiles = '
 COMPANION_PARAM_KEYS = ('mmproj', 'spec-draft-model', 'model-draft')
+DEFAULT_SERVER_URL = 'http://localhost:8080'
+HF_HOST = 'huggingface.co'
+GGUF_SHARD_RE = re.compile(r'^(?P<stem>.+)-(?P<index>\d{5})-of-(?P<total>\d{5})\.gguf$', re.I)
+
+def parse_hf_source(source):
+  """Parse a repository, quantifier, or huggingface blob/resolve URL safely."""
+  raw = str(source or '').strip()
+  if not raw or '\\' in raw or any(part in ('.', '..') for part in raw.split('/')):
+    raise ValueError('Invalid Hugging Face source')
+  repo = quantifier = path = None
+  if '://' in raw:
+    parsed = urlparse(raw)
+    if parsed.scheme != 'https' or parsed.netloc.lower() != HF_HOST:
+      raise ValueError('Only https://huggingface.co sources are supported')
+    parts = [part for part in parsed.path.split('/') if part]
+    marker = next((i for i, value in enumerate(parts) if value in ('blob', 'resolve')), None)
+    if marker is None or marker < 2 or marker + 2 >= len(parts):
+      raise ValueError('Expected a Hugging Face blob or resolve file URL')
+    repo = '/'.join(parts[:marker])
+    path = '/'.join(parts[marker + 2:])
+    revision = parts[marker + 1]
+  else:
+    revision = 'main'
+    bits = raw.split(':', 1)
+    repo = bits[0]
+    quantifier = bits[1].strip() if len(bits) == 2 else None
+  repo_parts = repo.split('/') if repo else []
+  if len(repo_parts) != 2 or any(not re.fullmatch(r'[A-Za-z0-9._-]+', p) for p in repo_parts):
+    raise ValueError('Repository must be owner/name')
+  if quantifier is not None and (not quantifier or '/' in quantifier or '\\' in quantifier):
+    raise ValueError('Invalid quantifier')
+  if path is not None and (not path.lower().endswith('.gguf') or path.startswith('/') or '..' in path.split('/')):
+    raise ValueError('Invalid GGUF file path')
+  return {'repo': repo, 'quantifier': quantifier, 'revision': revision, 'path': path}
+
+def fetch_hf_tree(repo, revision='main'):
+  """Fetch all GGUF-relevant files from the paginated HF tree API."""
+  url = f'https://{HF_HOST}/api/models/{quote(repo, safe="/")}/tree/{quote(revision, safe="")}?recursive=true&expand=true'
+  files = []
+  while url:
+    req = urllib.request.Request(url, headers={'Accept': 'application/json', 'User-Agent': 'llama-controller'})
+    with urllib.request.urlopen(req, timeout=30) as response:
+      payload = json.loads(response.read().decode('utf-8'))
+      if not isinstance(payload, list):
+        raise ValueError('Unexpected Hugging Face tree response')
+      files.extend(item for item in payload if item.get('type') == 'file' and str(item.get('path', '')).lower().endswith('.gguf'))
+      link = response.headers.get('Link', '')
+      match = re.search(r'<([^>]+)>;\s*rel="next"', link)
+      url = match.group(1) if match else None
+  return [{'path': item['path'], 'size': int(item.get('size') or 0)} for item in files]
+
+def classify_gguf(path):
+  basename = os.path.basename(path).lower()
+  if basename.startswith('mmproj'):
+    return 'mmproj'
+  if basename.startswith('mtp') or basename.endswith('-mtp.gguf') or 'mtp' in path.lower().split('/')[:-1]:
+    return 'mtp'
+  return 'model'
+
+def group_model_shards(files):
+  """Group complete shard sets; unsharded GGUFs are single-file groups."""
+  groups = []
+  grouped = {}
+  for item in files:
+    path = item['path'] if isinstance(item, dict) else item
+    match = GGUF_SHARD_RE.match(os.path.basename(path))
+    if not match:
+      if classify_gguf(path) == 'model':
+        groups.append({'id': path, 'files': [item], 'complete': True})
+      continue
+    key = (os.path.dirname(path), match.group('stem'), match.group('total'))
+    grouped.setdefault(key, []).append(item)
+  for (directory, stem, total), entries in grouped.items():
+    expected = int(total)
+    indexes = {int(GGUF_SHARD_RE.match(os.path.basename(e['path']))['index']) for e in entries}
+    complete = indexes == set(range(1, expected + 1))
+    entries.sort(key=lambda e: e['path'])
+    groups.append({'id': f'{directory}/{stem}' if directory else stem, 'files': entries, 'complete': complete})
+  return sorted(groups, key=lambda group: group['id'])
+
+def resolve_quant(groups, quantifier=None):
+  candidates = groups
+  if quantifier:
+    q = quantifier.lower()
+    candidates = [g for g in groups if re.search(r'(?:^|[-_.])' + re.escape(q) + r'(?=\.gguf|[-_.]|$)', g['id'].lower())]
+  elif groups:
+    preferred = [g for g in groups if re.search(r'(?:^|[-_.])q4_k_m(?=\.gguf|[-_.]|$)', g['id'].lower())]
+    candidates = preferred or groups
+  complete = [g for g in candidates if g['complete']]
+  if len(complete) == 1:
+    return complete[0], candidates
+  return None, candidates
+
+def _safe_model_path(relative):
+  value = str(relative or '').replace('\\', '/')
+  if not value or value.startswith('/') or any(part in ('', '.', '..') for part in value.split('/')):
+    raise ValueError('Invalid model path')
+  root = os.path.realpath(MODELS_DIR)
+  target = os.path.realpath(os.path.join(root, *value.split('/')))
+  if os.path.commonpath([root, target]) != root:
+    raise ValueError('Model path escapes models directory')
+  return target
+
+def _relative_model_path(path):
+  target = os.path.realpath(path)
+  root = os.path.realpath(MODELS_DIR)
+  if os.path.commonpath([root, target]) != root:
+    return None
+  return os.path.relpath(target, root).replace(os.sep, '/')
+
+def _iter_model_files():
+  if not os.path.isdir(MODELS_DIR):
+    return []
+  result = []
+  for root, _, names in os.walk(MODELS_DIR):
+    for name in names:
+      if name.lower().endswith('.gguf'):
+        path = os.path.join(root, name)
+        if os.path.isfile(path) and _relative_model_path(path) is not None:
+          result.append(path)
+  return sorted(result)
 
 def ensure_data_dir():
   """Create runtime directories and seed persistent configuration files."""
@@ -98,6 +221,12 @@ llama_process = None
 def load_config():
   with open(CONFIG_FILE, 'r') as f:
     return _normalize_config(json.load(f))
+
+def configured_server_url(config=None):
+  """Return the persisted public llama-server URL, with env compatibility."""
+  config = config if config is not None else load_config()
+  return (config.get('llama_server_url') or
+          os.environ.get('LLAMA_SERVER_URL') or DEFAULT_SERVER_URL).strip()
 
 def save_config(data):
   normalized = _normalize_config(data)
@@ -294,12 +423,7 @@ def _resolved_model_path(model):
 
 def _model_file_kind(filename):
   """Classify conventional llama.cpp companion filenames without parsing GGUF data."""
-  basename = os.path.basename(filename).lower()
-  if basename.startswith('mmproj'):
-    return 'mmproj'
-  if basename.startswith('mtp'):
-    return 'mtp'
-  return 'model'
+  return classify_gguf(filename)
 
 def _stored_file_message(action, filename):
   kind = _model_file_kind(filename)
@@ -431,7 +555,7 @@ def stop_llama():
 
 @app.route('/')
 def index():
-  llama_server_url = os.environ.get('LLAMA_SERVER_URL', 'http://localhost:8080')
+  llama_server_url = configured_server_url()
   return render_template('index.html', version=__version__, llama_server_url=llama_server_url)
 
 @app.route('/favicon.ico')
@@ -448,7 +572,9 @@ def llama_icon():
 
 @app.route('/api/config', methods=['GET'])
 def get_config():
-  return jsonify(load_config())
+  config = load_config()
+  config['llama_server_url'] = configured_server_url(config)
+  return jsonify(config)
 
 @app.route('/api/llama-help')
 def llama_help():
@@ -487,6 +613,18 @@ def update_config():
     return jsonify({"success": True, "restarted": restarted, "message": restart_message})
   return jsonify({"success": True, "restarted": False, "message": "Build profiles saved."})
 
+@app.route('/api/server-url', methods=['POST'])
+def update_server_url():
+  data = request.get_json(force=True)
+  url = str(data.get('llama_server_url') or '').strip()
+  parsed = urlparse(url)
+  if parsed.scheme not in ('http', 'https') or not parsed.netloc:
+    return jsonify({"success": False, "message": "Enter a valid HTTP or HTTPS URL."}), 400
+  config = load_config()
+  config['llama_server_url'] = url
+  save_config(config)
+  return jsonify({"success": True, "llama_server_url": url, "message": "Llama UI URL saved."})
+
 @app.route('/api/model-presets', methods=['GET'])
 def get_model_presets():
   try:
@@ -510,7 +648,7 @@ def update_model_presets():
 
 @app.route('/api/model-presets/refresh', methods=['POST'])
 def refresh_model_presets():
-  """Auto-add empty presets for GGUF files missing presets, and delete presets with missing model files."""
+  """Auto-add primary GGUF files recursively and remove stale primary presets."""
   try:
     preset_config = load_model_presets()
     global_params = preset_config['global_params']
@@ -518,17 +656,12 @@ def refresh_model_presets():
   except (OSError, ValueError) as e:
     return jsonify({"success": False, "message": f"Could not read models.ini: {e}"}), 500
 
-  try:
-    all_files = sorted(os.listdir(MODELS_DIR))
-  except FileNotFoundError:
-    all_files = []
-
-  gguf_files = [
-    f for f in all_files
-    if f.lower().endswith('.gguf')
-    and _model_file_kind(f) == 'model'
-    and os.path.isfile(os.path.join(MODELS_DIR, f))
+  local_model_files = [f for f in _iter_model_files() if classify_gguf(f) == 'model']
+  local_entries = [
+    {'path': _relative_model_path(path), 'size': os.path.getsize(path)}
+    for path in local_model_files
   ]
+  gguf_groups = [group for group in group_model_shards(local_entries) if group['complete']]
 
   def get_preset_target_path(preset):
     model_val = next((param['value'] for param in preset['params'] if param['key'] == 'model'), '')
@@ -549,10 +682,12 @@ def refresh_model_presets():
   covered_model_paths = set(get_preset_target_path(p) for p in remaining_presets)
 
   added_count = 0
-  for f in gguf_files:
-    file_path = os.path.realpath(os.path.join(MODELS_DIR, f))
+  for group in gguf_groups:
+    first = group['files'][0]['path']
+    file_path = os.path.realpath(os.path.join(MODELS_DIR, first))
     if file_path not in covered_model_paths:
-      base_name = os.path.splitext(f)[0]
+      relative = first
+      base_name = os.path.splitext(os.path.basename(relative))[0]
       name = base_name
       counter = 1
       while name in seen_names or name == '*':
@@ -562,7 +697,8 @@ def refresh_model_presets():
       seen_names.add(name)
       remaining_presets.append({
         'name': name,
-        'params': [{'key': 'model', 'value': f'data/models/{f}'}]
+        'params': [{'key': 'model', 'value': f'data/models/{relative}'}],
+        'build_profiles': None,
       })
       added_count += 1
 
@@ -724,18 +860,28 @@ def build_llama():
 @app.route('/api/models')
 def list_models():
   try:
-    files = sorted(os.listdir(MODELS_DIR))
-  except FileNotFoundError:
-    files = []
+    preset_config = load_model_presets()
+  except (OSError, ValueError):
+    preset_config = {'presets': []}
+  references = {}
+  for preset in preset_config.get('presets', []):
+    for param in preset.get('params', []):
+      if param['key'] in ('model', 'mmproj', 'spec-draft-model', 'model-draft'):
+        resolved = _resolved_model_path(param['value'])
+        relative = _relative_model_path(resolved)
+        if relative:
+          references.setdefault(relative, []).append(preset['name'])
   models = []
-  for f in files:
-    path = os.path.join(MODELS_DIR, f)
-    if os.path.isfile(path):
-      models.append({
-        "name": f,
-        "size": os.path.getsize(path),
-        "kind": _model_file_kind(f),
-      })
+  for path in _iter_model_files():
+    relative = _relative_model_path(path)
+    models.append({
+      "name": relative,
+      "basename": os.path.basename(relative),
+      "size": os.path.getsize(path),
+      "kind": classify_gguf(relative),
+      "referencing_presets": references.get(relative, []),
+      "reference_count": len(references.get(relative, [])),
+    })
   return jsonify({"models": models})
 
 @app.route('/api/upload', methods=['POST'])
@@ -747,6 +893,9 @@ def upload_model():
     return jsonify({"success": False, "message": "No selected file"})
 
   safe_name = os.path.basename(file.filename)
+  if not safe_name.lower().endswith('.gguf') or safe_name in ('.', '..'):
+    return jsonify({"success": False, "message": "Only GGUF files are supported."}), 400
+  os.makedirs(MODELS_DIR, exist_ok=True)
   file.save(os.path.join(MODELS_DIR, safe_name))
   return jsonify({
     "success": True,
@@ -757,8 +906,10 @@ def upload_model():
 
 @app.route('/api/models/<path:filename>', methods=['DELETE'])
 def delete_model(filename):
-  # Prevent path traversal and identify presets before removing the file.
-  safe_path = os.path.join(MODELS_DIR, os.path.basename(filename))
+  try:
+    safe_path = _safe_model_path(filename)
+  except ValueError:
+    return jsonify({"success": False, "message": "Invalid model path"}), 400
   if not os.path.isfile(safe_path):
     return jsonify({"success": False, "message": "File not found"}), 404
   try:
@@ -806,6 +957,10 @@ def delete_model(filename):
     return jsonify({"success": False, "message": f"Could not update models.ini: {e}"}), 400
 
   os.remove(safe_path)
+  parent = os.path.dirname(safe_path)
+  while parent != os.path.realpath(MODELS_DIR) and os.path.isdir(parent) and not os.listdir(parent):
+    os.rmdir(parent)
+    parent = os.path.dirname(parent)
   presets_changed = bool(removed_presets or updated_presets or global_params_updated)
   if not presets_changed:
     return jsonify({
@@ -837,44 +992,112 @@ def delete_model(filename):
 
 @app.route('/api/download', methods=['POST'])
 def download_model():
-  """Stream a GGUF model download from Hugging Face with SSE progress events."""
-  body = request.get_json(force=True)
-  repo = (body.get('repo') or '').strip()
-  filename = (body.get('filename') or '').strip()
-  if not repo or not filename:
-    return jsonify({"success": False, "message": "Both 'repo' and 'filename' are required."}), 400
-  if not filename.lower().endswith('.gguf'):
-    return jsonify({"success": False, "message": "Only .gguf files are supported."}), 400
-  safe_name = os.path.basename(filename)
-  dest = os.path.join(MODELS_DIR, safe_name)
-  url = f"https://huggingface.co/{repo}/resolve/main/{filename}"
+  """Stream validated one- or multi-file Hugging Face downloads with SSE."""
+  body = request.get_json(silent=True) or {}
+  try:
+    repo = str(body.get('repo') or '').strip()
+    revision = str(body.get('revision') or 'main').strip()
+    if not re.fullmatch(r'[A-Za-z0-9._-]+/[A-Za-z0-9._-]+', repo) or not revision or '/' in revision:
+      raise ValueError('Invalid repository or revision')
+    requested = body.get('files')
+    if requested is None:
+      filename = str(body.get('filename') or '').strip()
+      requested = [{'path': filename, 'role': classify_gguf(filename)}]
+    if not isinstance(requested, list) or not requested:
+      raise ValueError('Select at least one GGUF file')
+    tree = fetch_hf_tree(repo, revision)
+    by_path = {item['path']: item for item in tree}
+    files = []
+    for entry in requested:
+      if not isinstance(entry, dict):
+        raise ValueError('Invalid file selection')
+      path = str(entry.get('path') or '')
+      if path not in by_path or not path.lower().endswith('.gguf'):
+        raise ValueError(f'File is not available in the repository: {path}')
+      _safe_model_path(os.path.join(repo, path))
+      role = str(entry.get('role') or classify_gguf(path))
+      if role not in ('model', 'mmproj', 'mtp'):
+        raise ValueError('Invalid artifact role')
+      files.append({'path': path, 'role': role, 'size': by_path[path].get('size', 0)})
+    for group in group_model_shards(files):
+      if not group['complete']:
+        raise ValueError(f'Select every shard of a complete model: {group["id"]}')
+  except (ValueError, OSError, urllib.error.URLError) as e:
+    return jsonify({"success": False, "message": str(e)}), 400
 
   def generate():
+    completed = []
     try:
-      req = urllib.request.urlopen(url)
-      total = int(req.headers.get('Content-Length') or 0)
-      downloaded = 0
-      chunk_size = 512 * 1024  # 512 KB
-      with open(dest, 'wb') as f:
-        while True:
-          chunk = req.read(chunk_size)
-          if not chunk:
-            break
-          f.write(chunk)
-          downloaded += len(chunk)
-          pct = int(downloaded * 100 / total) if total else 0
-          yield f"data: {json.dumps({'progress': pct, 'downloaded': downloaded, 'total': total})}\n\n"
-      yield f"data: {json.dumps({'success': True, 'filename': safe_name, 'kind': _model_file_kind(safe_name), 'message': _stored_file_message('Downloaded', safe_name)})}\n\n"
+      total_all = sum(int(item.get('size') or 0) for item in files)
+      aggregate = 0
+      yield f"data: {json.dumps({'event': 'manifest', 'repo': repo, 'files': files, 'total': total_all})}\n\n"
+      for item in files:
+        relative = f'{repo}/{item["path"]}'
+        dest = _safe_model_path(relative)
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        expected = int(item.get('size') or 0)
+        part = dest + '.part'
+        url = f'https://{HF_HOST}/{quote(repo, safe="/")}/resolve/{quote(revision, safe="")}/{quote(item["path"], safe="/")}'
+        yield f"data: {json.dumps({'event': 'file-start', 'path': item['path'], 'total': expected})}\n\n"
+        current = 0
+        with urllib.request.urlopen(url, timeout=120) as req, open(part, 'wb') as output:
+          while True:
+            chunk = req.read(512 * 1024)
+            if not chunk:
+              break
+            output.write(chunk)
+            current += len(chunk)
+            yield f"data: {json.dumps({'event': 'file-progress', 'path': item['path'], 'file_downloaded': current, 'file_total': expected, 'downloaded': aggregate + current, 'total': total_all})}\n\n"
+        if expected and current != expected:
+          raise ValueError(f'Incomplete download for {item["path"]}')
+        os.replace(part, dest)
+        aggregate += current
+        completed.append(_relative_model_path(dest))
+        yield f"data: {json.dumps({'event': 'file-complete', 'path': item['path'], 'downloaded': aggregate, 'total': total_all})}\n\n"
+      yield f"data: {json.dumps({'event': 'complete', 'success': True, 'files': completed, 'message': f'Downloaded {len(completed)} file(s).'})}\n\n"
     except Exception as e:
-      if os.path.exists(dest):
-        os.remove(dest)
-      yield f"data: {json.dumps({'success': False, 'message': f'Download failed: {e}'})}\n\n"
+      for item in files:
+        try:
+          part = _safe_model_path(f'{repo}/{item["path"]}') + '.part'
+          if os.path.exists(part):
+            os.remove(part)
+        except ValueError:
+          pass
+      yield f"data: {json.dumps({'event': 'error', 'success': False, 'message': f'Download failed: {e}', 'completed': completed})}\n\n"
 
   return Response(
     stream_with_context(generate()),
     mimetype='text/event-stream',
     headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'}
   )
+
+@app.route('/api/hf/resolve', methods=['POST'])
+def resolve_hf():
+  try:
+    source = parse_hf_source((request.get_json(silent=True) or {}).get('source'))
+    tree = fetch_hf_tree(source['repo'], source['revision'])
+    groups = group_model_shards([item for item in tree if classify_gguf(item['path']) == 'model'])
+    selected, candidates = resolve_quant(groups, source['quantifier'])
+    if source['path']:
+      exact = next((item for item in tree if item['path'] == source['path']), None)
+      if exact is None:
+        raise ValueError('Requested GGUF file was not found')
+      selected = next((group for group in groups if any(f['path'] == source['path'] for f in group['files'])), None)
+      candidates = [selected] if selected else []
+    companions = []
+    for item in tree:
+      role = classify_gguf(item['path'])
+      if role in ('mmproj', 'mtp'):
+        companions.append({**item, 'role': role, 'recommended': item['path'] == source['path'] if source['path'] else item['path'].count('/') == 0})
+    preset_name = source['repo'] + (f':{source["quantifier"]}' if source['quantifier'] else '')
+    return jsonify({
+      'repo': source['repo'], 'revision': source['revision'], 'quantifier': source['quantifier'],
+      'path': source['path'], 'suggested_preset_name': preset_name,
+      'model_groups': [{**group, 'selected': group is selected and group['complete']} for group in candidates],
+      'companions': companions,
+    })
+  except (ValueError, OSError, urllib.error.URLError) as e:
+    return jsonify({'success': False, 'message': str(e)}), 400
 
 @app.route('/api/logs')
 def get_logs():

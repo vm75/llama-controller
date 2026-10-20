@@ -11,6 +11,12 @@ A lightweight, minimal control plane for [`llama.cpp`](https://github.com/ggml-o
 
 It manages compiling `llama.cpp` from source, downloading model files, configuring model-serving presets, and controlling the process lifecycle of `llama-server` — all from a single-page web UI.
 
+## Unreleased development changes
+
+HF repository inspection and multi-file downloads, an editable Llama UI link, and the `Containerfile`/`compose.yml` naming migration are unreleased changes. The version remains 0.6.0.
+
+Downloads honor explicit file URLs and require complete shard selections. Selected files are downloaded afresh into `.part` files and atomically replaced after size validation; interrupted files restart from the beginning on retry. This avoids reusing equal-sized weights from another revision. Failed requests restore the download controls. Recursive model listing and preset refresh skip symlinks whose targets are outside the model directory.
+
 ## Why Llama Controller
 
 Local inference is often constrained by the hardware already on hand: limited GPU memory, modest system RAM, or a CPU that benefits from a backend-specific build. `llama.cpp` provides the low-overhead engine and a broad set of serving controls, but using those controls directly can mean repeatedly editing command lines or configuration files, rebuilding for a different backend, and manually restarting a server whenever models or settings change.
@@ -77,10 +83,12 @@ Ternary models such as [`prism-ml/Ternary-Bonsai-27B-gguf`](https://huggingface.
 - **No Bloat:** Built with vanilla HTML/JS and Tailwind CSS via CDN. Backend is a single Python Flask file. No Node.js, Webpack, React, databases, or complex setup.
 - **Model Presets:** Add, edit, duplicate, and delete `llama-server` model presets from the UI. Assign each preset to one or more compatible Build Profiles; the active server receives only its supported presets. Refresh presets automatically adds missing GGUF files and cleans up stale presets. Preset and global parameters are stored in `data/models.ini`.
 - **Companion GGUF Files:** Store and attach `mmproj-*.gguf` multimodal projectors and `mtp-*.gguf` speculative draft files through dedicated preset fields, with missing-file warnings in the UI.
+- **Hugging Face inspection:** Enter an `owner/repo[:quant]` specifier or Hugging Face blob/resolve URL to inspect available GGUF model shards and recommended mmproj/MTP companions before selecting a multi-file download. Downloads are stored under `data/models/<owner>/<repo>/` and use atomic replacement after size validation.
 - **Decoupled Model Storage:** Downloads and uploads do not restart or change the models served by `llama-server`. Deletion restarts only when a preset or companion reference changes.
 - **Build Profiles:** Keep multiple independent `llama-server` source/build profiles, each with its own Git repository, branch, CMake flags, and apt packages. Select one active profile to run while preserving every other checkout and build.
 - **Build Templates:** Select CPU, BLAS, CUDA, ROCm, or Vulkan to fill both CMake flags and required apt packages for the current profile.
 - **Process Management:** Start, stop, and monitor the `llama-server` lifecycle. Logs stream in real-time, with one-click options to copy to clipboard or download server and build logs.
+- **Configurable Llama UI Link:** Set the URL opened by the running-server link directly from the UI; it is persisted in `data/config.json`.
 - **Rootless Podman Support:** Designed from the ground up to be compatible with rootless Podman containers.
 
 ## How It Works
@@ -95,7 +103,7 @@ Ternary models such as [`prism-ml/Ternary-Bonsai-27B-gguf`](https://huggingface.
 ### 1. Copy the sample compose file
 
 ```bash
-cp docker-compose.yml.example docker-compose.yml
+cp compose.yml.example compose.yml
 ```
 
 ### 2. (Optional) Configure ports
@@ -116,8 +124,7 @@ cp .env.example .env
 
 ```bash
 docker compose up -d
-# or with Podman
-podman-compose up -d
+# or: podman compose up -d
 ```
 
 The Web UI will be available at `http://localhost:5000`. The llama-server inference API runs on `http://localhost:8080`.
@@ -125,6 +132,8 @@ The Web UI will be available at `http://localhost:5000`. The llama-server infere
 The first run includes a `Main llama.cpp` build profile for `https://github.com/ggml-org/llama.cpp.git` on `master`. Choose a hardware template and click **Save & Build**. Create or duplicate profiles for forks, branches, or different build settings; each profile stores its repository, branch, CMake flags, and apt packages in `data/config.json` and keeps its own checkout under `build-profiles/`. **Save & Set Active** selects the binary used at startup and for later restarts. Repository and branch are no longer configured through Docker environment variables.
 
 For persistence across container recreation, optionally mount `./build-profiles` to `/home/llama/app/build-profiles`, just like the optional `venv` mount in the sample Compose file.
+
+The **Llama UI Link** setting controls the destination of the **Llama UI** button shown when `llama-server` is running. It defaults to `http://localhost:8080` and is saved in `data/config.json`; `LLAMA_SERVER_URL` provides the initial fallback for existing installations without that setting.
 
 ### Using Docker Run
 
@@ -148,7 +157,7 @@ Models are stored in `./data/models/` on the host (mounted to `/home/llama/app/d
 - **Upload via the web UI** — works well for smaller models.
 - **Copy directly** — for models >2 GB, place `.gguf` files straight into `./data/models/`.
 
-Primary model files are not automatically served. After a primary upload or download, the UI opens the preset editor with that file selected; save it to expose the model or cancel to keep it as storage only. Files whose names start with `mmproj` or `mtp` are stored as companions instead of opening a new preset. Edit a serving preset to attach a multimodal projector or MTP draft file. Selecting an MTP file writes `spec-draft-model` and adds `draft-mtp` to `spec-type` automatically.
+Primary model files are not automatically served. After a primary upload or download, the UI opens the preset editor with that file selected; save it to expose the model or cancel to keep it as storage only. Files whose names start with `mmproj` or `mtp` are stored as companions instead of opening a new preset. Edit a serving preset to attach a multimodal projector or MTP draft file. Selecting an MTP file writes `spec-draft-model` and adds `draft-mtp` to `spec-type` automatically. HF inspection can select complete sharded models and multiple companions in one download; auxiliary files never become standalone router models.
 
 In **Model Serving Presets**, you can also choose **Compatible Build Profiles**. A preset with no restriction is served by every build; a ternary-only preset can be restricted to the matching fork. The controller stores restrictions as comments in `data/models.ini`, then filters them out of the active server’s generated router file. You can also add a named preset manually, choose its local files, duplicate an existing preset (auto-generating a unique running number suffix), or use **Refresh Presets** to auto-add presets for unassigned primary GGUF files and remove presets whose primary model files are missing. Companion files are never turned into standalone presets. The UI writes a section like this to `./data/models.ini`:
 
@@ -177,11 +186,12 @@ On upgrade, existing runtime `params` from `data/config.json` are migrated to th
 
 ### Makefile Targets
 
-The project includes a `Makefile` for common Podman workflows:
+The project includes a configurable `Makefile` for common container workflows. It
+uses Podman by default; set `CONTAINER_CLI=docker` to use Docker instead:
 
 ```bash
 make build    # Build the container image
-make run      # Start services via podman compose
+make run      # Start services via the selected Compose implementation
 make test     # Health-check the running Web UI
 make stop     # Stop services
 make clean    # Remove containers (keeps volumes)
@@ -201,7 +211,12 @@ python server/server.py
 ### Building the Image
 
 ```bash
-docker build -t llama-controller .
+docker build -f Containerfile -t llama-controller .
+# or: podman build -f Containerfile -t llama-controller .
+
+# The Makefile uses Podman by default:
+make build
+CONTAINER_CLI=docker make build
 ```
 
 ## License
